@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { lightHaptic } from '../app/haptics.ts';
 import { loadDict } from '../app/dict.ts';
 import { footnoteAnnotator } from '../core/annot/footnotes.ts';
-import { forgetLemma, isSaved, recordLookup, seenLemmas, setSaved } from '../core/annot/lookups.ts';
+import { forgetLemma, isSaved, recordLookup, savedLemmas, seenLemmas, setSaved } from '../core/annot/lookups.ts';
 import type { Db } from '../core/db/types.ts';
 import type { DictService, LookupResult } from '../core/dict/service.ts';
 import { GrammarService, type GrammarRun, type RunState } from '../core/grammar/service.ts';
@@ -57,8 +57,10 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const popRef = useRef<Pop | null>(null);
   const dictRef = useRef<DictService | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
+  /** Lemmas with `saved = 1` in this book. A footnote follows these, not every lookup. */
+  const savedRef = useRef<Set<string>>(new Set());
   const seenDirty = useRef(false);
-  /** Predicted lemmas (M7). Passed to the annotator apart from `seen`, so a guess can look lighter than a lookup. */
+  /** Predicted lemmas (M7): footnoted without 保存, and drawn lighter than a saved word. */
   const predictedRef = useRef<Set<string>>(new Set());
   const modelRef = useRef<VocabModel | null>(null);
   const lemmasRef = useRef<Set<string> | null>(null);
@@ -76,31 +78,38 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const setPop = useCallback((p: Pop | null) => { popRef.current = p; setPopState(p); }, []);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
-  /** Looked-up and predicted lemmas: both already have a footnote (P-03). */
-  const footnoted = (): Set<string> => new Set([...seenRef.current, ...predictedRef.current]);
+  /** Saved lemmas and predicted words (P-03). A lookup alone is not a footnote; 保存 adds the lemma. Predictions do not require 保存. */
+  const footnoted = (): Set<string> => new Set([...savedRef.current, ...predictedRef.current]);
+  /** Unsaved lookups in this book. They are not force-footnoted; a difficulty prediction still shows, and 保存 adds the rest. */
+  const unsavedLookups = (): Set<string> => {
+    const out = new Set<string>();
+    for (const l of seenRef.current) if (!savedRef.current.has(l)) out.add(l);
+    return out;
+  };
   const applyFootnotes = () => {
     const dict = dictRef.current;
-    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, seenRef.current, predictedRef.current));
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current));
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {
     const model = modelRef.current;
     const lemmas = lemmasRef.current;
     if (!model || !lemmas) return false;
-    const next = model.predict(lemmas, prefs.get().predict);
+    const next = model.predict(lemmas, prefs.get().predict, unsavedLookups());
     const prev = predictedRef.current;
     predictedRef.current = next;
     return next.size !== prev.size || [...next].some((l) => !prev.has(l));
   };
 
-  // Dictionary and `seen` load in the background; the reader is usable before they arrive. Predicted
-  // words follow once the vocabulary model is loaded and the book is scanned (in slices, P-08).
+  // Dictionary, lookups and saved lemmas load in the background; the reader is usable before they arrive.
+  // Footnotes follow saved lemmas. Predicted words follow once the model is loaded and the book is scanned (P-08).
   useEffect(() => {
     let live = true;
-    void Promise.all([loadDict(), seenLemmas(db, bookId)]).then(async ([dict, seen]) => {
+    void Promise.all([loadDict(), seenLemmas(db, bookId), savedLemmas(db, bookId)]).then(async ([dict, seen, saved]) => {
       if (!live) return;
       dictRef.current = dict;
-      seenRef.current = seen;
+      for (const l of seen) seenRef.current.add(l);
+      for (const l of saved) savedRef.current.add(l);
       applyFootnotes();
       const [model, lemmas] = await Promise.all([VocabModel.load(db, dict), bookLemmas(bookId, book.chapters, dict)]);
       if (!live) return;
@@ -152,7 +161,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return { state: 'ready', result: r, predicted: predictedRef.current.has(r.lemma) && !seenRef.current.has(r.lemma) };
   };
 
-  /** Side effects of a successful lookup: Lookup row, `seen`, saved state (README → On open). */
+  /** A lookup writes a row, trains the model and logs the metric. The footnote waits for 保存. */
   const record = (p: Pop) => {
     const r = p.result;
     if (!r || p.target.kind !== 'word') return;
@@ -160,9 +169,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const predicted = p.predicted;
     if (!seenRef.current.has(r.lemma)) {
       seenRef.current.add(r.lemma);
-      seenDirty.current = true;
       const model = modelRef.current;
-      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; });
+      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; refreshFootnotes(); });
     }
     void logMetric(db, { type: 'lookup', bookId, predicted });
     recording.current = (async () => {
@@ -173,12 +181,17 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       const cur = popRef.current;
       if (cur?.target === p.target && cur.saved) await setSaved(db, id, true); // Save tapped before the row existed
       const saved = await isSaved(db, bookId, r.lemma);
+      if (saved && !savedRef.current.has(r.lemma)) {
+        savedRef.current.add(r.lemma);
+        seenDirty.current = true;
+        refreshFootnotes();
+      }
       const now = popRef.current;
       if (now?.target === p.target && !now.closing) setPop({ ...now, lookupId: id, saved: saved || now.saved });
     })();
   };
 
-  /** A newly seen lemma gets its footnote everywhere, including under the open word (fig-4a-drawer). */
+  /** A newly saved lemma gets its footnote everywhere, including under the open word. */
   const refreshFootnotes = () => {
     if (!seenDirty.current || !dictRef.current) return;
     seenDirty.current = false;
@@ -205,7 +218,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     }
     const word = target.hit;
     e.setHighlight(word);
-    const p: Pop = { ...base, ...resolve(word) };
+    const resolved = resolve(word);
+    const p: Pop = { ...base, ...resolved, saved: !!resolved.result && savedRef.current.has(resolved.result.lemma) };
     setPop(p);
     if (tapAt !== undefined) {
       requestAnimationFrame(() => { window.__spotlightTapMs = performance.now() - tapAt; });
@@ -216,7 +230,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
         dictRef.current ??= dict; // this can run before the load effect's own callback sets it
         const cur = popRef.current;
         if (cur?.target !== target || cur.closing) return;
-        const next = { ...cur, ...resolve(word) };
+        const resolved = resolve(word);
+        const next = { ...cur, ...resolved, saved: cur.saved || (!!resolved.result && savedRef.current.has(resolved.result.lemma)) };
         setPop(next);
         if (next.state === 'ready') record(next);
       }).catch(() => {
@@ -373,7 +388,13 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const save = () => {
     const p = popRef.current;
     if (!p || p.state !== 'ready') return;
+    const lemma = p.result?.lemma;
     setPop({ ...p, saved: true });
+    if (lemma && !savedRef.current.has(lemma)) {
+      savedRef.current.add(lemma);
+      seenDirty.current = true;
+      refreshFootnotes();
+    }
     if (p.lookupId !== null) void setSaved(db, p.lookupId, true);
   };
 
@@ -386,6 +407,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const lemma = p?.result?.lemma;
     if (!p || p.closing || !lemma) return;
     if (seenRef.current.delete(lemma)) seenDirty.current = true;
+    if (savedRef.current.delete(lemma)) seenDirty.current = true;
     if (predictedRef.current.delete(lemma)) seenDirty.current = true;
     void logMetric(db, { type: 'undo', bookId, predicted: p.predicted });
     close();

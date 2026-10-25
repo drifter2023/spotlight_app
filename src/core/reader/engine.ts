@@ -303,7 +303,7 @@ export class ReaderEngine implements GuideHost {
   }
 
   /**
-   * Re-runs the annotator over mounted paragraphs, e.g. after a new lookup joins `seen`. Paragraphs
+   * Re-runs the annotator over mounted paragraphs, e.g. after 保存 adds a lemma. Paragraphs
    * nearest the band go first; the rest follow in background slices, so no frame is blocked (R-01).
    */
   refreshAnnotations(): void {

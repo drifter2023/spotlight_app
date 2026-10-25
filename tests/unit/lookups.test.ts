@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { forgetLemma, isSaved, listLookups, recordLookup, seenLemmas, setSaved, type NewLookup } from '../../src/core/annot/lookups.ts';
+import { forgetLemma, isSaved, listLookups, recordLookup, savedLemmas, seenLemmas, setSaved, type NewLookup } from '../../src/core/annot/lookups.ts';
 import { migrate } from '../../src/core/db/migrations.ts';
 import type { Db } from '../../src/core/db/types.ts';
 import { saveParsedBook } from '../../src/core/library/library.ts';
@@ -26,12 +26,25 @@ describe('lookups', () => {
     expect(r!.loc).toEqual({ chapter: 0, para: 0, sentence: 0, offset: 4 });
   });
 
-  it('seen is the distinct lemmas of this book only (R-06)', async () => {
+  it('seen is the distinct lemmas looked up in this book only', async () => {
     await recordLookup(db, row('a', 'go'));
     await recordLookup(db, row('a', 'go'));
     await recordLookup(db, row('a', 'run'));
     await recordLookup(db, row('b', 'quay'));
     expect(await seenLemmas(db, 'a')).toEqual(new Set(['go', 'run']));
+    expect(await savedLemmas(db, 'a')).toEqual(new Set());
+  });
+
+  it('a footnote follows saved lemmas, not every lookup (R-06)', async () => {
+    const go = await recordLookup(db, row('a', 'go'));
+    await recordLookup(db, row('a', 'run'));
+    await recordLookup(db, row('b', 'go'));
+    expect(await savedLemmas(db, 'a')).toEqual(new Set());
+    await setSaved(db, go, true);
+    await recordLookup(db, row('a', 'go')); // a later unsaved row does not drop the lemma
+    expect(await savedLemmas(db, 'a')).toEqual(new Set(['go']));
+    expect(await seenLemmas(db, 'a')).toEqual(new Set(['go', 'run']));
+    expect(await savedLemmas(db, 'b')).toEqual(new Set());
   });
 
   it('saves and unsaves (R-09)', async () => {
@@ -55,7 +68,9 @@ describe('lookups', () => {
     await recordLookup(db, row('b', 'go'));
     await forgetLemma(db, 'a', 'go');
     expect([...await seenLemmas(db, 'a')]).toEqual(['run']);
+    expect(await savedLemmas(db, 'a')).toEqual(new Set());
     expect(await isSaved(db, 'a', 'go')).toBe(false);
     expect([...await seenLemmas(db, 'b')]).toEqual(['go']);
+    expect(await savedLemmas(db, 'b')).toEqual(new Set());
   });
 });
