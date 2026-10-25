@@ -128,23 +128,37 @@ test('R-05: a drawer opened low on the screen is scrolled up to stay 70 px above
   expect(bottom).toBeLessThanOrEqual(vp.height - 70 + 8 + 1);
 });
 
-test('R-06 and R-09: footnotes follow the lemma, survive a reload, and Save sticks', async ({ page }) => {
+test('R-06 and R-09: a footnote follows a saved lemma, survives a reload, and 已存 sticks', async ({ page }) => {
   await open(page);
+  const adviceNote = page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn');
   const a = await wordInBand(page, 'advice');
   await page.mouse.click(a.x, a.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
   // Let the 330 ms open finish: clicking a half-revealed button makes Playwright scroll it into view.
   await page.waitForTimeout(450);
+  await expect(page.getByRole('button', { name: '保存' })).toBeVisible();
+  await expect(adviceNote).toHaveCount(0); // a lookup alone leaves no footnote
+
+  const hl0 = (await page.locator('.rd-hl').boundingBox())!;
+  await page.mouse.click(hl0.x + hl0.width / 2, hl0.y + hl0.height / 2);
+  await expect(drawer(page)).toHaveCount(0);
+  await expect(adviceNote).toHaveCount(0); // closing without 保存 leaves none
+
+  const again = await wordInBand(page, 'advice');
+  await page.mouse.click(again.x, again.y);
+  await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
+  await page.waitForTimeout(450);
+  await expect(page.getByRole('button', { name: '保存' })).toBeVisible();
   await page.getByRole('button', { name: '保存' }).click();
   await expect(page.getByRole('button', { name: '已存' })).toBeVisible();
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready'); // Save does not close the drawer
-  // Keep-on-screen may have scrolled the text up; tap the highlighted word where it is now.
+  await expect(adviceNote.first()).toHaveText('忠告');
+
   await page.waitForTimeout(700);
   const hl = (await page.locator('.rd-hl').boundingBox())!;
   await page.mouse.click(hl.x + hl.width / 2, hl.y + hl.height / 2);
   await expect(drawer(page)).toHaveCount(0);
-  const note = page.locator('.rd-w', { hasText: 'advice' }).first().locator('.rd-fn');
-  await expect(note).toHaveText('忠告');
+  await expect(adviceNote.first()).toHaveText('忠告');
 
   await page.reload();
   await ready(page);
@@ -161,7 +175,8 @@ test('Undo: 撤回 forgets a mistaken word; its footnotes are gone, also after a
   await page.mouse.click(a.x, a.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
   await page.waitForTimeout(450);
-  await page.getByRole('button', { name: '保存' }).click(); // undo also clears a saved word
+  await page.getByRole('button', { name: '保存' }).click(); // the footnote follows 保存; 撤回 clears it
+  await expect(page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn').first()).toHaveText('忠告');
   await page.getByRole('button', { name: '撤回生词标记' }).click();
   await expect(drawer(page)).toHaveCount(0);
   await expect(page.locator('.rd-hl')).toHaveCount(0);

@@ -56,12 +56,16 @@ export class VocabModel {
 
   /**
    * Lemmas in `lemmas` the reader probably does not know, at `level` (P-03, P-05). A word looked up
-   * in another book is predicted whatever its difficulty; this book's own lookups already have footnotes.
+   * on this device is predicted whatever its difficulty. `skipLookedUp` omits this book's unsaved
+   * lookups from that rule, so their footnote waits for 保存. Difficulty predictions stay.
    */
-  predict(lemmas: Iterable<string>, level: PredictLevel): Set<string> {
+  predict(lemmas: Iterable<string>, level: PredictLevel, skipLookedUp?: ReadonlySet<string>): Set<string> {
     const out = predictWords(lemmas, (l) => this.difficulty.of(l), this.#theta, level, this.#exclude);
     if (level === 'off') return out;
-    for (const l of lemmas) if (this.#known.lookedUp.has(l) && !this.#exclude.has(l)) out.add(l);
+    for (const l of lemmas) {
+      if (skipLookedUp?.has(l)) continue;
+      if (this.#known.lookedUp.has(l) && !this.#exclude.has(l)) out.add(l);
+    }
     return out;
   }
 

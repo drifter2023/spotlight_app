@@ -24,9 +24,18 @@ export async function recordLookup(db: Db, l: NewLookup): Promise<number> {
   return id;
 }
 
-/** Every lemma looked up in this book (R-06: `seen` is per book). */
+/** Distinct lemmas with a Lookup row in this book. A footnote does not follow every lookup; see `savedLemmas`. */
 export async function seenLemmas(db: Db, bookId: string): Promise<Set<string>> {
   const rows = await db.all<{ lemma: string }>('SELECT DISTINCT lemma FROM lookup WHERE book_id = ?', [bookId]);
+  return new Set(rows.map((r) => r.lemma));
+}
+
+/** Lemmas saved in this book (`saved = 1`). The footnote follows a saved lemma, not a mere lookup. */
+export async function savedLemmas(db: Db, bookId: string): Promise<Set<string>> {
+  const rows = await db.all<{ lemma: string }>(
+    'SELECT DISTINCT lemma FROM lookup WHERE book_id = ? AND saved = 1',
+    [bookId],
+  );
   return new Set(rows.map((r) => r.lemma));
 }
 
