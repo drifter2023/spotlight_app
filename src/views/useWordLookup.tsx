@@ -58,7 +58,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const dictRef = useRef<DictService | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const seenDirty = useRef(false);
-  /** Predicted words (M7): footnoted like `seen`, from the vocabulary model and this book's lemmas. */
+  /** Predicted lemmas (M7). Passed to the annotator apart from `seen`, so a guess can look lighter than a lookup. */
   const predictedRef = useRef<Set<string>>(new Set());
   const modelRef = useRef<VocabModel | null>(null);
   const lemmasRef = useRef<Set<string> | null>(null);
@@ -76,10 +76,11 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const setPop = useCallback((p: Pop | null) => { popRef.current = p; setPopState(p); }, []);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
-  /** Looked-up and predicted words: both get footnotes (P-03). */
+  /** Looked-up and predicted lemmas: both already have a footnote (P-03). */
   const footnoted = (): Set<string> => new Set([...seenRef.current, ...predictedRef.current]);
   const applyFootnotes = () => {
-    if (dictRef.current) engine.current?.setAnnotator(footnoteAnnotator(dictRef.current, footnoted()));
+    const dict = dictRef.current;
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, seenRef.current, predictedRef.current));
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {

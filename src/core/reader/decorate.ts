@@ -1,5 +1,5 @@
-/** A 9px footnote under a word (R-06), in paragraph-text offsets. */
-export interface Footnote { start: number; end: number; text: string }
+/** A 9px footnote under a word (R-06), in paragraph-text offsets. A predicted gloss recedes. */
+export interface Footnote { start: number; end: number; text: string; kind?: 'predicted' }
 export interface Span { start: number; end: number }
 
 /**
@@ -9,12 +9,12 @@ export interface Span { start: number; end: number }
  */
 export function renderLine(el: HTMLElement, text: string, lineStart: number, notes: Footnote[], hl: Span | null): void {
   const doc = el.ownerDocument;
-  const marks = new Map<number, { end: number; note?: string; hl?: boolean }>();
+  const marks = new Map<number, { end: number; note?: string; predicted?: boolean; hl?: boolean }>();
   const lineEnd = lineStart + text.length;
   for (const n of notes) {
     const a = Math.max(n.start, lineStart);
     const b = Math.min(n.end, lineEnd);
-    if (b > a) marks.set(a, { end: b, note: n.text });
+    if (b > a) marks.set(a, { end: b, note: n.text, predicted: n.kind === 'predicted' });
   }
   if (hl) {
     const a = Math.max(hl.start, lineStart);
@@ -36,7 +36,7 @@ export function renderLine(el: HTMLElement, text: string, lineStart: number, not
     w.textContent = text.slice(a - lineStart, m.end - lineStart);
     if (m.note) {
       const fn = doc.createElement('span');
-      fn.className = 'rd-fn';
+      fn.className = m.predicted ? 'rd-fn rd-fn-predicted' : 'rd-fn';
       fn.textContent = m.note;
       w.append(fn);
     }

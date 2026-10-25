@@ -5,17 +5,23 @@ import type { Annotator } from '../reader/engine.ts';
 import { wordContext, words } from '../reader/words.ts';
 
 /**
- * R-06: every word whose lemma is in `seen` gets its first sense as a footnote. A Set of the seen
- * lemmas' surface forms filters words cheaply; only candidates go through the full lookup.
+ * R-06: every word whose lemma is in `seen` or `predicted` gets its first sense as a footnote.
+ * A lemma only in `predicted` is `kind: 'predicted'` so the gloss can recede; one the reader has
+ * looked up (even if it is also predicted) stays the ordinary footnote. A Set of those lemmas'
+ * surface forms filters words cheaply; only candidates go through the full lookup.
  */
-export function footnoteAnnotator(dict: DictService, seen: ReadonlySet<string>): Annotator {
-  if (!seen.size) return () => [];
-  const forms = dict.formsOf(seen);
-  const lowerSeen = new Set([...seen].map((l) => l.toLowerCase()));
+export function footnoteAnnotator(
+  dict: DictService,
+  seen: ReadonlySet<string>,
+  predicted: ReadonlySet<string> = new Set(),
+): Annotator {
+  if (!seen.size && !predicted.size) return () => [];
+  const forms = dict.formsOf(new Set([...seen, ...predicted]));
+  const lowerLemmas = new Set([...seen, ...predicted].map((l) => l.toLowerCase()));
   const candidate = (w: string): boolean => {
     const core = stripClitic(normaliseWord(w)).toLowerCase();
     if (forms.has(core)) return true;
-    for (const c of ruleCandidates(core)) if (lowerSeen.has(c.lemma)) return true;
+    for (const c of ruleCandidates(core)) if (lowerLemmas.has(c.lemma)) return true;
     return false;
   };
   return (_chapter, _para, p, text) => {
@@ -23,7 +29,10 @@ export function footnoteAnnotator(dict: DictService, seen: ReadonlySet<string>):
     for (const w of words(text)) {
       if (!candidate(w.word)) continue;
       const r = dict.lookup(w.word, wordContext(p, w.start));
-      if (r && seen.has(r.lemma)) out.push({ start: w.start, end: w.end, text: r.footnote });
+      if (!r || (!seen.has(r.lemma) && !predicted.has(r.lemma))) continue;
+      const note: Footnote = { start: w.start, end: w.end, text: r.footnote };
+      if (predicted.has(r.lemma) && !seen.has(r.lemma)) note.kind = 'predicted';
+      out.push(note);
     }
     return out;
   };
