@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { Session } from '../../app/boot.ts';
 import { Capacitor } from '@capacitor/core';
 import { ImportError, importFile, importLink, type ImportProgress, type ImportResult, type LinkStage } from '../../app/importBook.ts';
-import { shareTextFile } from '../../app/share.ts';
-import { exportMetrics } from '../../core/metrics/metrics.ts';
 import { linkFrom } from '../../core/ingest/link.ts';
 import { BUNDLED } from '../../core/library/bundled.ts';
 import { dateEyebrow, minutesLeft } from '../../core/library/format.ts';
@@ -11,7 +9,6 @@ import { deleteBook, listShelf, restoreBundled, type ShelfBook } from '../../cor
 import type { Theme } from '../../core/prefs/prefs.ts';
 import type { ParsedBook } from '../../core/types.ts';
 import { Confirm } from '../Confirm.tsx';
-import { AiKeyCard } from './AiKeyCard.tsx';
 import { ImportChooser } from './ImportChooser.tsx';
 import { ShelfRow } from './ShelfRow.tsx';
 import { VocabCard } from './VocabCard.tsx';
@@ -81,12 +78,6 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
     await reload();
   };
 
-  /** Beta metrics leave the device only when the tester shares this file themselves. */
-  const exportLog = async () => {
-    const day = new Date().toISOString().slice(0, 10);
-    await shareTextFile(`spotlight-log-${day}.json`, await exportMetrics(session.db)).catch(() => {});
-  };
-
   if (!shelf) return <div className="home" />;
   const current = shelf.find((b) => b.openedAt !== null);
   const rows = shelf.filter((b) => b.status === filter);
@@ -122,7 +113,7 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
           >
             <div className="eyebrow label">Continue</div>
             <h1 className="continue-title">{current.title}</h1>
-            <div className="continue-meta">{current.author}{current.author ? ' · ' : ''}第 {current.chapter + 1} 章</div>
+            <div className="continue-meta">{current.author}{current.author ? ' · ' : ''}{continueWhere(current)}</div>
             <div className="continue-progress">
               <div className="bar"><i style={{ width: `${Math.max(1, Math.round(current.pct))}%` }} /></div>
               <span className="continue-pct">{Math.max(1, Math.round(current.pct))}%</span>
@@ -151,7 +142,7 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
               {BUNDLED.map((b) => (
                 <li key={b.id}>
                   <span><span className="empty-title">{b.title}</span><span className="empty-author">{b.author}</span></span>
-                  <button type="button" onClick={() => void restore(b.id)}>放回书架</button>
+                  <button type="button" onClick={() => void restore(b.id)}>从这本开始</button>
                 </li>
               ))}
             </ul>
@@ -180,11 +171,6 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
         )}
 
         <VocabCard db={session.db} />
-        <AiKeyCard db={session.db} />
-
-        <footer className="home-foot">
-          <button type="button" onClick={() => void exportLog()}>导出内测日志</button>
-        </footer>
       </div>
 
       {importing && (
@@ -228,6 +214,12 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
       )}
     </div>
   );
+}
+
+/** The chapter the reader would show in the eyebrow, or 第 N 章 when the book has no title for it. */
+function continueWhere(book: ShelfBook): string {
+  const title = book.chapterTitle.trim();
+  return title || `第 ${book.chapter + 1} 章`;
 }
 
 /** The progress sheet's name for a link: its host and path, else what was pasted. */

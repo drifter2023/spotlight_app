@@ -399,7 +399,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const drawer = pop
     ? createPortal(
       pop.target.kind === 'sentence'
-        ? <GrammarDrawer closing={pop.closing} run={pop.runState!} x={pop.x} onRetry={() => pop.run?.retry()} />
+        ? <GrammarDrawer closing={pop.closing} run={pop.runState!} x={pop.x} db={db} onRetry={() => pop.run?.retry()} />
         : <WordDrawer state={pop.state} closing={pop.closing} result={pop.result} x={pop.x} saved={pop.saved} onSave={save} onUndo={undo} />,
       pop.host,
     )

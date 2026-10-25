@@ -5,13 +5,14 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { Db } from '../../src/core/db/types.ts';
 import type { RunState } from '../../src/core/grammar/service.ts';
 import { GrammarDrawer } from '../../src/views/WordDrawer.tsx';
 
 let root: Root | null = null;
 afterEach(() => { root?.unmount(); root = null; document.body.innerHTML = ''; });
 
-function render(run: RunState, width: number): HTMLElement {
+function render(run: RunState, width: number, db?: Db): HTMLElement {
   const still = document.createElement('style');
   still.textContent = '*, *::before { animation: none !important; }'; // measure the opened drawer, not its first frame
   document.body.append(still);
@@ -20,9 +21,12 @@ function render(run: RunState, width: number): HTMLElement {
   Object.assign(page.style, { position: 'relative', width: `${width}px`, padding: '0 34px', boxSizing: 'border-box' });
   document.body.append(page);
   root = createRoot(page);
-  flushSync(() => root!.render(createElement(GrammarDrawer, { closing: false, run, x: 120, onRetry: () => {} })));
+  flushSync(() => root!.render(createElement(GrammarDrawer, { closing: false, run, x: 120, onRetry: () => {}, db })));
   return page.querySelector<HTMLElement>('.wd')!;
 }
+
+/** Enough of user.db for the key form to see that nothing is stored. */
+const noKeyDb = { all: async () => [], run: async () => {}, exec: async () => {}, tx: async (fn: () => Promise<void>) => { await fn(); } } as Db;
 
 /** The longest answer the prompt allows: a long translation, a 24-字 pattern and 5 points of 60 字 each (all Chinese, the widest case). */
 const POINT = '这一部分说明句子的主干成分以及它和后面从句之间的修饰关系，读的时候先抓住主语和谓语，再看后面的从句怎样修饰前面的名词和动词'.slice(0, 60);
@@ -141,7 +145,7 @@ describe('grammar drawer', () => {
     expect(wd.querySelectorAll('.wd-caret')).toHaveLength(0);
   });
 
-  it('G-05: a failure keeps what arrived, says it was not saved, and offers 重试; no key offers no retry', () => {
+  it('G-05: a failure keeps what arrived, says it was not saved, and offers 重试; no key offers no retry', async () => {
     let wd = render({ status: 'error', reason: 'timeout', partial: { translation: '他那黄灰色的眼睛是平的。', pattern: '简单句', points: [{ label: '主干', text: 'eyes were horizontal' }], pending: null } }, 402);
     expect(wd.dataset.state).toBe('error');
     expect(wd.querySelector('.wd-translation')!.textContent).toBe('他那黄灰色的眼睛是平的。');
@@ -150,8 +154,11 @@ describe('grammar drawer', () => {
     expect(wd.querySelector('button')!.textContent).toBe('重试');
     root!.unmount(); document.body.innerHTML = '';
 
-    wd = render({ status: 'error', reason: 'no-key', partial: null }, 402);
-    expect(wd.querySelector('.wd-miss')!.textContent).toBe('先在首页填写 DeepSeek API Key');
-    expect(wd.querySelector('button')).toBeNull();
+    wd = render({ status: 'error', reason: 'no-key', partial: null }, 402, noKeyDb);
+    expect(wd.querySelector('.wd-miss')!.textContent).toBe('还没有 DeepSeek API Key');
+    expect([...wd.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['填写 Key']);
+    (wd.querySelector('button') as HTMLButtonElement).click();
+    await expect.poll(() => wd.querySelector('input[aria-label="DeepSeek API Key"]')).not.toBeNull();
+    expect([...wd.querySelectorAll('button')].some((b) => b.textContent === '重试')).toBe(false);
   });
 });

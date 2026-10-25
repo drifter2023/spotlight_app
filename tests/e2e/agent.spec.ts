@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { sseText } from '../helpers/sse.ts';
-import { fullTier, ready } from './helpers.ts';
+import { fullTier, ready, saveDeepSeekKey } from './helpers.ts';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -30,12 +30,7 @@ async function swipe(page: Page, from: number, to: number) {
 test('A-01…A-05: swipe left opens the Agent drawer, a question is answered with a 出处 and stored, swipe right closes', async ({ page }) => {
   await fullTier(page);
   const bodies = await fakeDeepSeek(page);
-  await page.goto('/');
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
-  await card.getByLabel('DeepSeek API Key').fill('sk-e2e-good');
-  await card.getByRole('button', { name: '确认' }).click();
-  await expect(card.locator('.ai-status')).toHaveText('已连接 ····good');
-  await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
+  await saveDeepSeekKey(page);
 
   await page.goto('/?book=gatsby');
   await ready(page);
