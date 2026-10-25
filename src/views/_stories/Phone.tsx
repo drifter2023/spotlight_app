@@ -23,7 +23,7 @@ function look(d: number, sharpAll: boolean, lit = false): CSSProperties {
   if (sharpAll) return { filter: 'none', opacity: 1 };
   if (d <= 0) return { filter: 'none', opacity: 1, color: 'var(--reader-accent)' };
   const t = Math.min(1, d / 6);
-  return { filter: `blur(${(7 * t).toFixed(1)}px)`, opacity: 1 - 0.85 * t };
+  return { filter: `blur(${(7 * t).toFixed(1)}px)`, opacity: 1 - 0.55 * t };
 }
 
 /** While 带读 plays: only the lit lines are sharp and coloured; the rest one step deeper. */
