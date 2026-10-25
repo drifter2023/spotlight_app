@@ -194,9 +194,10 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   /**
    * Tap arbitration (README, routeTap): a tap inside a drawer is the drawer's own; otherwise an open
    * sheet or drawer closes first, a tap in the title area (down to just below the eyebrow) shows or
-   * hides the top bar and capsule (even on a word), then a word or droplet opens its drawer. A tap
-   * that opens nothing shows or hides them on blank space or the page edge, and only hides them on
-   * text, blurred or sharp (owner request 2026-10-20).
+   * hides the top bar and capsule (even on a word — it never looks a word up). Then a sharp word or
+   * droplet opens its drawer. With 聚焦模糊 on, a word outside the sharp band scrolls that line to
+   * the centre and then opens. A tap that opens nothing shows or hides them on blank space or the
+   * page edge, and only hides them on other text (owner request 2026-10-20).
    */
   const onTap = (e: MouseEvent) => {
     if (drawerInner(e.target)) return;
@@ -224,7 +225,6 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   };
 
   const vars = { '--focus-pct': prefs.focusPct, '--blur-max': `${blurMaxFor(prefs)}px` } as CSSProperties;
-  const night = prefs.theme === 'night';
   return (
     <div ref={shellRef} className="rd-shell" onPointerDownCapture={pauseOnTouch} onWheelCapture={pauseOnTouch}>
     <AgentDrawer db={session.db} book={book} engine={engineRef} open={agentOpen} panelRef={panelRef}
@@ -246,8 +246,8 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       </div>
       {lookup.drawer}
       {selection.ui}
-      {/* 夜读 only; it steps aside while the top bar and capsule are up (owner decision 2026-10-20). */}
-      {night && !chrome && (
+      {/* Steps aside while the top bar and capsule are up (owner decision 2026-10-20). */}
+      {!chrome && (
         <GuideBar playing={guiding} speed={prefs.guideSpeed} faded={guiding && barFaded} fillRef={fillRef}
           onPlay={() => { showChrome(false); guideRef.current?.play(); }}
           onPause={() => guideRef.current?.pause('user')}

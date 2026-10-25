@@ -32,6 +32,8 @@ const SCROLL_LOCK_MS = MOTION.drawerClose;
 const KEEP_BOTTOM = 70;
 /** Beta metric: does the reader scroll again within 10 s of closing a drawer? */
 const RESCROLL_MS = 10000;
+/** A soft word scrolls to the viewport centre, then its drawer opens (same length as a 带读 step). */
+const REACH_MS = 600;
 
 export interface WordLookup {
   /** Call from the engine's onRelayout. */
@@ -66,6 +68,12 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const lemmasRef = useRef<Set<string> | null>(null);
   const lockUntil = useRef(0);
   const pending = useRef<Target | null>(null);
+  /** A word outside the sharp band, opened after the drawer that was in the way has closed. */
+  const pendingReach = useRef<WordHit | null>(null);
+  /** Cancels a scroll-then-open that has not opened yet. */
+  const reachCancel = useRef<((openIt: boolean) => void) | null>(null);
+  const beginReachRef = useRef<(hit: WordHit, tapAt?: number) => void>(() => {});
+  const cancelReach = () => { reachCancel.current?.(false); };
   /** The Lookup write in flight, so an undo can wait for the row it deletes. */
   const recording = useRef<Promise<void>>(Promise.resolve());
   const timers = useRef<number[]>([]);
@@ -125,6 +133,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return () => {
       live = false;
       offPrefs();
+      cancelReach();
       void modelRef.current?.flush();
       for (const t of timers.current) clearTimeout(t);
       unfollow.current?.();
@@ -300,7 +309,10 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       refreshFootnotes();
       const next = pending.current;
       pending.current = null;
+      const reach = pendingReach.current;
+      pendingReach.current = null;
       if (next) open(next);
+      else if (reach) beginReachRef.current(reach);
     }, MOTION.drawerClose);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setPop]);
@@ -343,6 +355,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
 
   /** A relayout (font size, rotation) dropped the lines the drawer was attached to. */
   const reset = () => {
+    cancelReach();
+    pendingReach.current = null;
     unfollow.current?.();
     pending.current = null;
     engine.current?.setHighlight(null);
@@ -350,18 +364,23 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   };
 
   /**
-   * A tap right on a word's glyphs opens the word; otherwise a droplet within reach opens its
-   * sentence. Only sharp text opens anything (the focus band, or every line with 聚焦模糊 off);
-   * blurred text is blank space.
+   * A tap on a sharp word's glyphs opens the word; otherwise a droplet within reach opens its
+   * sentence. Sharp means the focus band, or every line while 聚焦模糊 is off. A word on a soft
+   * line (t > 0, or painted with blur / a lower opacity) is `reach`: scroll it to the centre, then open.
    */
-  const targetAt = (e: ReaderEngine, x: number, y: number): Target | null => {
+  const resolveTap = (e: ReaderEngine, x: number, y: number): { target: Target | null; reach: WordHit | null } => {
     const tapped = e.hitTest(x, y);
-    const word = tapped && e.isTappable(tapped.lineIndex) ? tapped : null;
-    const r = word?.rect;
-    const onGlyphs = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-    const drop = onGlyphs ? null : e.dropAt(x, y);
-    if (drop) return { kind: 'sentence', hit: drop };
-    return word ? { kind: 'word', hit: word } : null;
+    const sharp = tapped && e.isTappable(tapped.lineIndex) ? tapped : null;
+    const r = sharp?.rect;
+    const onSharpGlyphs = !!(r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+    if (tapped && !sharp) {
+      const g = tapped.rect;
+      if (x >= g.left && x <= g.right && y >= g.top && y <= g.bottom) return { target: null, reach: tapped };
+    }
+    const drop = onSharpGlyphs ? null : e.dropAt(x, y);
+    if (drop) return { target: { kind: 'sentence', hit: drop }, reach: null };
+    if (sharp) return { target: { kind: 'word', hit: sharp }, reach: null };
+    return { target: null, reach: null };
   };
 
   const sameTarget = (a: Target, b: Target): boolean => {
@@ -369,20 +388,64 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return a.kind === 'word' ? a.hit.start === (b.hit as WordHit).start : a.hit.sentence === (b.hit as SentenceHit).sentence;
   };
 
+  /** Scroll `hit`'s line to the viewport centre, then open it. A touch or wheel before then cancels. */
+  const beginReach = (hit: WordHit, tapAt?: number) => {
+    const e = engine.current;
+    if (!e) return;
+    cancelReach();
+    const scroller = e.scroller;
+    let stopScroll = () => {};
+    let onUser = () => {};
+    const finish = (openIt: boolean) => {
+      if (reachCancel.current !== finish) return;
+      reachCancel.current = null;
+      scroller.removeEventListener('pointerdown', onUser);
+      scroller.removeEventListener('wheel', onUser);
+      stopScroll();
+      if (!openIt) return;
+      const now = engine.current;
+      if (!now) return;
+      const box = now.scroller.getBoundingClientRect();
+      const x = hit.rect.left + hit.rect.width / 2;
+      const fresh = now.hitTest(x, box.top + box.height / 2);
+      const same = fresh && fresh.chapter === hit.chapter && fresh.para === hit.para && fresh.start === hit.start;
+      open({ kind: 'word', hit: same ? fresh : hit }, tapAt);
+    };
+    onUser = () => finish(false);
+    scroller.addEventListener('pointerdown', onUser);
+    scroller.addEventListener('wheel', onUser, { passive: true });
+    reachCancel.current = finish;
+    stopScroll = e.scrollLineToCentre(hit.lineIndex, REACH_MS, () => finish(true));
+  };
+  beginReachRef.current = beginReach;
+
   const onTap = (x: number, y: number, timeStamp: number, closeOnly = false): boolean => {
     const e = engine.current;
     if (!e) return false;
+    cancelReach();
+    pendingReach.current = null;
     const p = popRef.current;
-    const target = closeOnly ? null : targetAt(e, x, y);
+    const { target, reach } = closeOnly ? { target: null, reach: null } : resolveTap(e, x, y);
     if (p) {
-      if (p.closing) { if (target) pending.current = target; return true; }
-      if (target && !sameTarget(target, p.target)) pending.current = target; // close first, then open after the close duration
+      if (p.closing) {
+        if (target) { pending.current = target; pendingReach.current = null; }
+        else if (reach) { pending.current = null; pendingReach.current = reach; }
+        return true;
+      }
+      if (target && !sameTarget(target, p.target)) { pending.current = target; pendingReach.current = null; } // close first, then open after the close duration
+      else if (!target && reach) { pending.current = null; pendingReach.current = reach; }
       close();
       return true;
     }
-    if (!target) return false;
-    open(target, timeStamp);
-    return true;
+    if (target) {
+      open(target, timeStamp);
+      return true;
+    }
+    if (reach) {
+      beginReach(reach, timeStamp);
+      return true;
+    }
+    return false;
   };
 
   const save = () => {
