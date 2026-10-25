@@ -81,9 +81,10 @@
   position: absolute; left: 0; top: calc(var(--fs, 19.5px) * 1.18); /* 23px at M (19.5/34), scaled for S and L */
   font: 500 9px/1 'PingFang SC', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif;
   letter-spacing: .04em; color: rgba(var(--reader-ink-rgb), .6);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: max(100%, 6em);
   pointer-events: none; -webkit-font-smoothing: antialiased;
 }
+.rd-fn-predicted { color: rgba(var(--reader-ink-rgb), .38); }
 .rd-gap { display: flow-root; }
 .rd-gapline { z-index: 4; } /* the line above an open drawer: its footnote hangs into the notch */
 
