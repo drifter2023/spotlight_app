@@ -6,9 +6,11 @@ import { SELECTION_SUGGESTIONS, SUGGESTIONS } from '../../core/agent/prompt.ts';
 import { createSession, listSessions, loadMessages } from '../../core/agent/store.ts';
 import type { AgentMessage, AgentSession } from '../../core/agent/types.ts';
 import { FAILURE, NO_RETRY } from '../../core/ai/failure.ts';
+import { getKey } from '../../core/ai/key.ts';
 import type { Db } from '../../core/db/types.ts';
 import type { ReaderEngine } from '../../core/reader/engine.ts';
 import type { ChapterData } from '../../core/types.ts';
+import { AiKeyCard } from '../home/AiKeyCard.tsx';
 
 interface Props {
   db: Db;
@@ -38,6 +40,12 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
   const [page, setPage] = useState<Page>(EMPTY_PAGE);
   const [sel, setSel] = useState(0);
   const [draft, setDraft] = useState('');
+  /** A question held because no key is stored yet. Nothing is sent until checkKey accepts one. */
+  const [held, setHeld] = useState<string | null>(null);
+  const heldRef = useRef<string | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  heldRef.current = held;
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickRef = useRef<HTMLDivElement>(null);
@@ -55,7 +63,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
 
   // Opening: read the text around the reader's position; the first time, continue the latest conversation.
   useEffect(() => {
-    if (!open) return;
+    if (!open) { heldRef.current = null; setHeld(null); return; }
     const a = engine.current?.currentAnchor() ?? { chapter: 0, para: 0, sentence: 0 };
     const p = pageAround(book.chapters, a);
     setPage(p);
@@ -125,6 +133,16 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
     const question = raw.trim();
     const sentence = flat[sel];
     if (!question || !sentence || (shown && (shown.state.status === 'waiting' || shown.state.status === 'streaming'))) return;
+    const key = await getKey(db);
+    if (!alive.current) return;
+    if (!key) {
+      heldRef.current = question;
+      setHeld(question);
+      return;
+    }
+    heldRef.current = null;
+    setHeld(null);
+    setDraft((d) => (d.trim() === question ? '' : d));
     let id = sid;
     if (!id) {
       id = newId();
@@ -222,6 +240,9 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
                   {!NO_RETRY.has(shown.state.reason) && (
                     <button type="button" className="ag-retry" onClick={() => void send(shown.question)}>重试</button>
                   )}
+                  {(shown.state.reason === 'no-key' || shown.state.reason === 'invalid-key') && (
+                    <AiKeyCard db={db} place="inline" initiallyEditing={shown.state.reason === 'invalid-key'} onSaved={() => void send(shown.question)} />
+                  )}
                 </>
               )}
             </div>
@@ -229,10 +250,18 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
         )}
       </div>
 
-      <div className="ag-chips" data-noswipe="">
-        {chips.map((q) => <button type="button" key={q} className="ag-chip" onClick={() => void send(q)}>{q}</button>)}
-      </div>
-      {attachment ? (
+      {held === null && (
+        <div className="ag-chips" data-noswipe="">
+          {chips.map((q) => <button type="button" key={q} className="ag-chip" onClick={() => void send(q)}>{q}</button>)}
+        </div>
+      )}
+      {held !== null ? (
+        <div className="ag-key" data-noswipe="">
+          <p className="ag-error" role="status">{FAILURE['no-key']}</p>
+          <p className="ag-key-q">{held}</p>
+          <AiKeyCard db={db} place="inline" onSaved={() => { if (openRef.current && heldRef.current) void send(heldRef.current); }} />
+        </div>
+      ) : attachment ? (
         <div className="ag-attach" data-noswipe="">
           <div className="ag-attach-body">
             <div className="ag-label">选中的文字 · 第 {attachment.chapter + 1} 章</div>
@@ -262,7 +291,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
           </div>
         </div>
       )}
-      <form className="ag-composer" onSubmit={(e) => { e.preventDefault(); const q = draft; setDraft(''); void send(q); }}>
+      <form className="ag-composer" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
         <input ref={inputRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={attachment ? '就这段文字提问' : '在页边写下你的问题'} aria-label="问题" enterKeyHint="send" />
         <button type="submit" className="ag-send" aria-label="发送" disabled={!draft.trim()}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">

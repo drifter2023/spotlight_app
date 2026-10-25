@@ -11,7 +11,11 @@ const SIZES: { v: FontSize; label: string; px: number }[] = [
 const PREDICT: { v: PredictLevel; label: string }[] = [{ v: 'off', label: '关' }, { v: 'few', label: '少' }, { v: 'many', label: '多' }];
 
 /** S-01, S-03: font size, focus blur on/off, focus band, blur, predicted words and sentence mode. Every change applies live and persists. */
-export function SettingsSheet({ prefs, open, onClose }: { prefs: PrefsStore; open: boolean; onClose: () => void }) {
+export function SettingsSheet({ prefs, open, onClose, onExport }: {
+  prefs: PrefsStore; open: boolean; onClose: () => void;
+  /** Beta log. The sheet stays presentational: the reader owns the file. */
+  onExport?: () => void;
+}) {
   const [p, setP] = useState(prefs.get());
   useEffect(() => prefs.subscribe((next) => setP(next)), [prefs]);
   return (
@@ -62,6 +66,7 @@ export function SettingsSheet({ prefs, open, onClose }: { prefs: PrefsStore; ope
         <input type="checkbox" role="switch" className="set-switch" checked={p.sentenceMode} aria-label="整句模式" disabled={!p.focusBlur}
           onChange={(e) => void prefs.set('sentenceMode', e.target.checked)} />
       </label>
+      {onExport && <button type="button" className="set-export" onClick={onExport}>导出内测日志</button>}
     </Sheet>
   );
 }

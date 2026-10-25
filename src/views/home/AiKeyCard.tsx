@@ -5,10 +5,21 @@ import type { Db } from '../../core/db/types.ts';
 
 type Note = { tone: 'error' | 'quiet'; text: string } | null;
 
-/** Home → the DeepSeek API key used by the grammar drawer (G-01). Saved only after `GET /models` accepts it. */
-export function AiKeyCard({ db }: { db: Db }) {
+/**
+ * The DeepSeek API key used by the grammar drawer and the Agent drawer (G-01).
+ * Saved only after `checkKey` (`GET /models`) accepts it. `place` is where it sits:
+ * the paper card, inline in the Agent drawer, or on the grammar drawer's leather.
+ */
+export function AiKeyCard({ db, onSaved, place = 'card', initiallyEditing = false }: {
+  db: Db;
+  /** After a key has been checked and stored. */
+  onSaved?: () => void;
+  place?: 'card' | 'inline' | 'leather';
+  /** Open the field immediately, even when a key is already stored (replacing an invalid one). */
+  initiallyEditing?: boolean;
+}) {
   const [saved, setSaved] = useState<string | null | undefined>(undefined);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initiallyEditing);
   const [draft, setDraft] = useState('');
   const [shown, setShown] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -33,6 +44,7 @@ export function AiKeyCard({ db }: { db: Db }) {
     setShown(false);
     setEditing(false);
     setNote(null);
+    onSaved?.();
   };
 
   const clear = async () => {
@@ -43,7 +55,7 @@ export function AiKeyCard({ db }: { db: Db }) {
   };
 
   return (
-    <section className="ai-card" aria-label="AI 语法分析">
+    <section className="ai-card" data-place={place} aria-label="AI 语法分析">
       <div className="ai-head">
         <span className="eyebrow">AI 语法分析</span>
         <span className="ai-status" data-state={saved ? 'on' : 'off'}>{saved ? `已连接 ${maskKey(saved)}` : '未设置'}</span>
@@ -76,7 +88,7 @@ export function AiKeyCard({ db }: { db: Db }) {
         </div>
       )}
       {note && <p className={note.tone === 'error' ? 'ai-note ai-note-error' : 'ai-note'} role="status">{note.text}</p>}
-      <p className="ai-fine">点句尾的小水滴时，会把那一句发给 DeepSeek 分析。Key 只保存在这台设备上。</p>
+      <p className="ai-fine">语法分析和旁注提问会把内容发给 DeepSeek。Key 只保存在这台设备上。</p>
     </section>
   );
 }

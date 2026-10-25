@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { Session } from '../app/boot.ts';
 import { devTools, exposeDevHandle } from '../app/devtools.ts';
-import { logMetric } from '../core/metrics/metrics.ts';
+import { shareTextFile } from '../app/share.ts';
+import { exportMetrics, logMetric } from '../core/metrics/metrics.ts';
 import { ReaderEngine, type EngineBook } from '../core/reader/engine.ts';
 import { PositionSaver, savePosition } from '../core/reader/position.ts';
 import { Guide } from '../core/reader/guide.ts';
@@ -271,7 +272,10 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
           }}
         />
       )}
-      <SettingsSheet prefs={session.prefs} open={sheet === 'settings'} onClose={() => setSheet(null)} />
+      <SettingsSheet prefs={session.prefs} open={sheet === 'settings'} onClose={() => setSheet(null)} onExport={() => {
+        const day = new Date().toISOString().slice(0, 10);
+        void exportMetrics(session.db).then((text) => shareTextFile(`spotlight-log-${day}.json`, text)).catch(() => {});
+      }} />
       <TocSheet
         chapters={book.chapters}
         current={chapter}

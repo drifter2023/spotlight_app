@@ -7,12 +7,12 @@ import { HomeScreen } from '../_stories/Phone.tsx';
 import { AiKeyCard } from './AiKeyCard.tsx';
 
 /**
- * Home → AI 语法分析 (G-01): the reader's own DeepSeek API key, used by the grammar drawer and the
- * Agent drawer. Saved only after DeepSeek accepts it; kept on the device. (These stories never press
+ * DeepSeek API key (G-01), offered when a grammar droplet or an Agent question needs one.
+ * Saved only after DeepSeek accepts it; kept on the device. (These stories never press
  * 确认 with a key: that would call DeepSeek.)
  */
 const meta = {
-  title: 'Home/AI 语法分析 AiKeyCard',
+  title: 'Reader/DeepSeek API Key AiKeyCard',
   render: (_args, { loaded }) => <HomeScreen><AiKeyCard db={loaded.db as Db} /></HomeScreen>,
 } satisfies Meta;
 export default meta;

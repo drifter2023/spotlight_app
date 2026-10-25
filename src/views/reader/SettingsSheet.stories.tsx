@@ -8,8 +8,8 @@ import { SettingsSheet } from './SettingsSheet.tsx';
 
 /**
  * 阅读设置 (S-01, S-03), opened by Aa: 字号, 聚焦模糊, 清晰带, 模糊强度, 预测生词, 整句模式 on the
- * leather surface. With 聚焦模糊 off the rows it governs grey out and the whole page is sharp.
- * Every change applies live — the controls work here too.
+ * leather surface, then a quiet 导出内测日志 row. With 聚焦模糊 off the rows it governs grey out
+ * and the whole page is sharp. Every change applies live — the controls work here too.
  */
 const meta = {
   title: 'Reader/阅读设置 SettingsSheet',
@@ -26,5 +26,5 @@ export const LargeTextNoPredictions: Story = { loaders: [async () => ({ prefs: a
 function Live({ prefs }: { prefs: PrefsStore }) {
   const [blur, setBlur] = useState(prefs.get().focusBlur);
   useEffect(() => prefs.subscribe((p) => setBlur(p.focusBlur)), [prefs]);
-  return <Phone><ReaderPage sharp={!blur} overlay={<SettingsSheet prefs={prefs} open onClose={fn()} />} /></Phone>;
+  return <Phone><ReaderPage sharp={!blur} overlay={<SettingsSheet prefs={prefs} open onClose={fn()} onExport={fn()} />} /></Phone>;
 }
