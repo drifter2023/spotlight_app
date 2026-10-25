@@ -272,6 +272,7 @@
 .gd-speeds button[aria-checked='true'] span { background: rgba(242, 237, 228, .92); color: #0e0e10; }
 
 /* ---- Reader chrome (README → Top bar, Bottom toolbar) ---- */
+/* The title bar and capsule fade together. ‹ 书架 stays, including over an open sheet (scrim z 6, sheet z 7). */
 .rd-top, .rd-capsule {
   position: absolute; z-index: 6; opacity: 0; pointer-events: none;
   transition: opacity 220ms var(--ease);
@@ -283,8 +284,10 @@
   background: var(--paper); box-shadow: 0 1px 0 rgba(var(--reader-ink-rgb), .07);
 }
 .rd-back {
+  position: absolute; z-index: 8; top: env(safe-area-inset-top); left: 0; box-sizing: border-box; width: 88px;
   height: 44px; padding: 0 0 0 16px; border: 0; background: none; text-align: left; color: var(--reader-ink);
   font: 400 14px/1 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif; -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
 }
 .rd-title {
   margin: 0; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
