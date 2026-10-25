@@ -176,21 +176,28 @@ test('Undo: 撤回 forgets a mistaken word; its footnotes are gone, also after a
   await expect(page.getByRole('button', { name: '保存' })).toBeVisible();
 });
 
-test('Only the focus band opens drawers: a blurred word opens nothing', async ({ page }) => {
+test('a blurred word scrolls into the band and opens its drawer', async ({ page }) => {
   await open(page);
-  await wordInBand(page, 'politician');
-  // Below the band (the title area at the top would show the menu instead, N-01).
+  await page.waitForFunction(() => performance.getEntriesByType('resource').some((r) => r.name.endsWith('dict.db')));
   const blurred = await page.evaluate(() => {
     const h = window.innerHeight;
     const line = [...document.querySelectorAll<HTMLElement>('.rd-line[data-p]')].find((l) => {
       const b = l.getBoundingClientRect();
-      return b.top > h - 260 && b.bottom < h - 160 && l.style.filter !== 'none';
+      return b.top > h * 0.62 && b.bottom < h - 160 && l.style.filter.startsWith('blur') && (l.textContent ?? '').trim().length > 20;
     })!;
+    line.dataset.reach = '1';
     const b = line.getBoundingClientRect();
     return { x: b.left + 40, y: b.top + b.height / 2 };
   });
   await page.mouse.click(blurred.x, blurred.y);
-  await page.waitForTimeout(400);
-  await expect(drawer(page)).toHaveCount(0);
-  await expect(page.locator('.rd-top')).not.toHaveClass(/rd-chrome-on/); // blurred text is still text: no menu (only blank space, the page edge and the title area show it)
+  await expect(drawer(page)).toHaveAttribute('data-state', 'ready', { timeout: 4000 });
+  await expect(page.locator('.rd-top')).not.toHaveClass(/rd-chrome-on/);
+  const placed = await page.evaluate(() => {
+    const line = document.querySelector<HTMLElement>('[data-reach="1"]')!;
+    const b = line.getBoundingClientRect();
+    return { dy: Math.abs(b.top + b.height / 2 - window.innerHeight / 2), filter: line.style.filter, hl: !!line.querySelector('.rd-hl') };
+  });
+  expect(placed.dy).toBeLessThan(48);
+  expect(placed.filter).toBe('none');
+  expect(placed.hl).toBe(true);
 });

@@ -151,31 +151,39 @@ test('N-01: a tap in the title area, on blank space or the page edge shows and h
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
 
   // The side margin, anywhere down the page, and the bottom edge: a tap shows them, the next hides them (owner request 2026-10-20).
-  for (const [x, y] of [[12, 130], [12, vp.height / 2], [vp.width - 12, vp.height * 0.75], [vp.width / 2, vp.height - 12]] as const) {
+  // The bottom centre can be a soft word now: that tap scrolls it into the band and opens.
+  // The corner is still the page edge (and the side margin), so it shows and hides the menu.
+  for (const [x, y] of [[12, 130], [12, vp.height / 2], [vp.width - 12, vp.height * 0.75], [vp.width - 12, vp.height - 12]] as const) {
     await page.mouse.click(x, y);
     await expect(bar).toHaveClass(/rd-chrome-on/);
     await expect(page.locator('.rd-capsule')).toHaveClass(/rd-chrome-on/);
     await page.mouse.click(x, y);
     await expect(bar).not.toHaveClass(/rd-chrome-on/);
   }
-  // A blurred line is text: a tap there shows nothing, and only hides them when they are shown.
-  const blurred = await page.evaluate(() => {
+  // A blurred word does not show the menu. It scrolls into the band and opens; shown chrome only hides.
+  const blurredWord = () => page.evaluate(() => {
     const h = window.innerHeight;
     const line = [...document.querySelectorAll<HTMLElement>('.rd-line[data-p]')].find((l) => {
       const b = l.getBoundingClientRect();
-      return b.top > h * 0.6 && b.bottom < h - 160 && l.style.filter !== 'none' && (l.textContent ?? '').trim().length > 20;
+      return b.top > h * 0.62 && b.bottom < h - 160 && l.style.filter.startsWith('blur') && (l.textContent ?? '').trim().length > 20;
     })!;
     const b = line.getBoundingClientRect();
     return { x: b.left + 40, y: b.top + b.height / 2 };
   });
-  await page.mouse.click(blurred.x, blurred.y);
-  await page.waitForTimeout(250);
+  await page.mouse.click((await blurredWord()).x, (await blurredWord()).y);
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
+  await expect(page.getByTestId('drawer')).toBeVisible({ timeout: 4000 });
+  await page.mouse.click(12, vp.height / 2); // an open drawer only closes
   await expect(page.getByTestId('drawer')).toHaveCount(0);
+  await expect(bar).not.toHaveClass(/rd-chrome-on/);
   await page.mouse.click(12, vp.height / 2);
   await expect(bar).toHaveClass(/rd-chrome-on/);
-  await page.mouse.click(blurred.x, blurred.y);
+  const blurredAgain = await blurredWord();
+  await page.mouse.click(blurredAgain.x, blurredAgain.y);
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
+  await expect(page.getByTestId('drawer')).toBeVisible({ timeout: 4000 });
+  await page.mouse.click(12, vp.height / 2);
+  await expect(page.getByTestId('drawer')).toHaveCount(0);
   // A word in the band opens its drawer and hides them.
   await page.mouse.click(12, vp.height / 2);
   await expect(bar).toHaveClass(/rd-chrome-on/);

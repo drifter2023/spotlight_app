@@ -19,11 +19,11 @@ async function night(page: Page, speed: 0.6 | 1 | 1.6 = 1) {
   await expect(bar(page)).toBeVisible();
 }
 
-test('N1/N5: the 带读 bar shows only in 夜读, and steps aside while the top bar and capsule are up', async ({ page }) => {
+test('N1/N5: the 带读 bar shows in 纸白 and 夜读, and steps aside while the top bar and capsule are up', async ({ page }) => {
   await fullTier(page);
   await page.goto('/?book=gatsby&dev=1');
   await ready(page);
-  await expect(bar(page)).toHaveCount(0);
+  await expect(bar(page)).toBeVisible();
   await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
   await expect(bar(page)).toBeVisible();
   await expect(page.locator('.rd-vignette')).toBeVisible();
@@ -69,7 +69,7 @@ test('NM-05: hiding the app, opening settings and switching to 纸白 each pause
   await play(page).click();
   await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'paper'));
   expect((await guide(page)).playing).toBe(false);
-  await expect(bar(page)).toHaveCount(0);
+  await expect(bar(page)).toBeVisible();
 
   await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
   await play(page).click();
