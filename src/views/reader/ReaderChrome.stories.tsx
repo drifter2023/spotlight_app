@@ -6,7 +6,7 @@ import { Phone, ReaderPage } from '../_stories/Phone.tsx';
 import { ReaderChrome } from './ReaderChrome.tsx';
 
 /**
- * Top bar (‹ 书架 + title) and the floating capsule (目录 · Aa), shown and hidden together.
+ * ‹ 书架 stays visible. The title and the floating capsule (目录 · Aa) show and hide together.
  * A tap in the title area (the top of the page down to just below the eyebrow, even on a word), on
  * blank space or at the page edge shows or hides them; a tap on text, blurred or sharp, only hides
  * them; they also fade after 3 s or on scroll (owner decisions 2026-10-15, owner request 2026-10-20).
@@ -21,7 +21,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Shown: Story = {};
-export const Hidden: Story = { args: { visible: false } };
+
+/** ‹ 书架 stays tappable while the title and capsule are hidden. */
+export const BackWhileCapsuleHidden: Story = { args: { visible: false } };
 
 /** Tap the margins or the gaps between paragraphs to show or hide them; a tap on a line only hides them. */
 export const TapBlank: Story = {

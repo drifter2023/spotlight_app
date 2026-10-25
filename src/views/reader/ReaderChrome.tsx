@@ -1,11 +1,19 @@
-/** Top bar (‹ 书架 + title) and the floating capsule (目录, Aa). Shown and hidden together. */
+/** ‹ 书架 stays up. The title bar and the capsule (目录 · Aa) show and hide together. */
 export function ReaderChrome({ visible, title, onBack, onToc, onSettings }: {
   visible: boolean; title: string; onBack: () => void; onToc: () => void; onSettings: () => void;
 }) {
   return (
     <>
+      <button
+        type="button"
+        className="rd-back"
+        tabIndex={0}
+        onClick={(e) => { e.stopPropagation(); onBack(); }}
+      >
+        ‹ 书架
+      </button>
       <header className={visible ? 'rd-top rd-chrome-on' : 'rd-top'} aria-hidden={!visible} onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="rd-back" onClick={onBack} tabIndex={visible ? 0 : -1}>‹ 书架</button>
+        <span className="rd-top-pad" />
         <h1 className="rd-title">{title}</h1>
         <span className="rd-top-pad" />
       </header>
