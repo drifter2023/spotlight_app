@@ -1,40 +1,41 @@
 # Handoff: 聚焦阅读 (Focus Reader)
 
-> **For Claude Design (updated 2026-10-25).** This folder is the design handoff of the app as it is built. Read this README first. `CHANGES_2026-10-14.md`, `NIGHT_MODE_1c.md` and `AGENT_DRAWER.md` keep the original pixel notes; each file starts with an **As built** box. Where an older paragraph, an HTML prototype, or `spec.mvp.json` disagrees with **As built** below, **As built** wins.
+> **For Claude Design (updated 2026-10-26).** This folder is the design handoff of the app as it is built. Read this README first. `CHANGES_2026-10-14.md`, `NIGHT_MODE_1c.md` and `AGENT_DRAWER.md` keep the original pixel notes; each file starts with an **As built** box. Where an older paragraph, an HTML prototype, or `spec.mvp.json` disagrees with **As built** below, **As built** wins. The 2026-10-26 behaviour is also written in `docs/handoff/2026-10-26/CHANGES.md`.
 >
 > The files in `design/` are HTML prototypes, not the app. They still show removed ideas (a tab bar, today stats, a top-30% tap that opens settings, a 夜读 row inside the reader settings). Use them for colour, type and motion. Use this README for what the product does.
 
-## As built (2026-10-25)
+## As built (2026-10-26)
 
 Two screens. Display name **Spotlight**. Targets: **iOS (Capacitor) and a mobile web app. No Android.**
 
-1. **Home** — date, a 纸白 / 夜读 capsule, continue reading, a shelf (在读 / 读完, import), then a predicted-vocabulary card and a DeepSeek key card. No tab bar, no streak, no today stats, no review cards.
-2. **Reader** — paper-white focus band (4a). At night the same layout uses 1c colours, and a 带读 bar can step through sentences. A sharp word opens a tear-paper drawer. Looked-up words, and words the device predicts the reader does not know, get a 9px Chinese footnote with **zero change to line height**.
+1. **Home** — date, a 纸白 / 夜读 capsule, continue reading (the chapter title when the book has one), a shelf (在读 / 读完, import), then a predicted-vocabulary card. An empty shelf's bundled books say 从这本开始. No DeepSeek key card, no beta-log button, no tab bar, no streak, no today stats, no review cards.
+2. **Reader** — paper-white focus band (4a). At night the same layout uses 1c colours. A sharp word opens a tear-paper drawer at once. A blurred word scrolls to the centre, then opens. 保存 leaves a 9px Chinese footnote; a predicted word gets a lighter footnote without 保存. Line height does not change. A short word's gloss may extend to about 6em.
+
+**Paper fade** is `1 − 0.55t` (0.45 at the edge). Blur is still `blurMax · t` and does not change the fade. Night fade stays `1 − 0.92t` (0.08 at t = 1).
 
 **The only theme switch** is the 纸白 / 夜读 capsule on Home. It changes the whole app: 1c colours in the reader, night colours on the 7a Home layout. Layout, type size and padding do not change. There is no 夜读 row in the reader settings sheet, and no automatic switch by clock or system appearance.
 
-**Reader chrome** stays: a top bar (`‹ 书架` and the title) and a capsule (`目录 · Aa`). They are hidden until a tap shows them. `Aa` opens the settings sheet from the bottom. There is no always-on button and no scroll indicator on the page edge.
+**Reader chrome:** `‹ 书架` stays visible. The book title and the capsule (`目录 · Aa`) are hidden until a tap shows them, then hide after 3s, on scroll, or on a text tap. `Aa` opens the settings sheet. The last settings row is 导出内测日志.
 
 **Tap order** on the reader:
 1. A text selection exists → clear it.
 2. A drawer or the settings sheet is open → close it.
-3. The tap is in the title area (the top of the page down to 22px below the chapter eyebrow), even on a word → show or hide the top bar and capsule.
-4. The tap hits a word on sharp text (the focus band, or any line while 聚焦模糊 is off) and the tap is below the title area → open the word drawer. Blurred text opens nothing.
-5. Blank space or the page edge (side margins, gaps between paragraphs, after a short line, the faded bottom edge) → show or hide the top bar and capsule.
-6. A tap on text, blurred or sharp, that did not open a drawer → hide the top bar and capsule if they are showing.
+3. The tap is in the title area (the top of the page down to 22px below the chapter eyebrow), even on a word → show or hide the title and capsule. It does not look a word up. `‹ 书架` stays.
+4. The tap hits a sharp word below the title area, or any word there while 聚焦模糊 is off → open the word drawer. A blurred word scrolls to the vertical centre, then opens. A touch or wheel during that scroll cancels it.
+5. Blank space or the page edge (side margins, gaps between paragraphs, after a short line, the faded bottom edge) → show or hide the title and capsule.
+6. A tap on text that did not open a drawer → hide the title and capsule if they are showing.
 
 **Also on the reader**
 - **聚焦模糊** in settings (default on). Off: every line sharp, fade masks shrink to a thin strip behind the eyebrow, and 清晰带 / 模糊强度 / 整句模式 are greyed out. Grammar droplets and predicted-word exposure still follow the focus band.
-- **撤回** on the word drawer. The book forgets that lemma (lookup rows, saved state, footnotes) and the drawer closes.
-- **Grammar droplet** after each sentence end, only on lines in the focus band. It opens a grammar drawer: the sentence's translation on top, then a short pattern and points. DeepSeek, with the reader's own key. The only sentence translation in the app.
+- **保存 / 撤回.** 保存 writes the footnote and the button stays 已存. Closing the drawer without 保存 leaves no footnote for that lookup. 撤回 forgets the lemma (rows, saved state, footnotes) and the drawer closes.
+- **Grammar droplet** after each sentence end, only on lines in the focus band. It opens a grammar drawer: the sentence's translation on top, then a short pattern and points. DeepSeek, with the reader's own key. If there is no key, the droplet offers 填写 Key and does not retry until the key is accepted. The only sentence translation in the app.
 - **Long-press** (380ms) on sharp text selects words. Two handles adjust the range. A 问旁注 pill sends the selection to the Agent drawer as an attachment. No system edit menu.
-- **Agent drawer:** a left swipe pushes the page aside into a card (about 60px of the page stays visible) and reveals a per-book chat, 旁注. DeepSeek, the reader's own key. No tools, no memory across books. 当前句 and a 问旁注 attachment share one slot above the input.
-- **带读** (夜读 only): the bar plays, pauses, shows chapter progress, and steps 0.6× / 1× / 1.6×. Any touch pauses it. Only Play resumes it. The bar steps aside while the top bar and capsule are up.
+- **Agent drawer:** a left swipe pushes the page aside into a card (about 60px of the page stays visible) and reveals a per-book chat, 旁注. DeepSeek, the reader's own key. Sending with no key shows the key form and holds the question. No tools, no memory across books. 当前句 and a 问旁注 attachment share one slot above the input.
+- **带读** in both 纸白 and 夜读: the bar plays, pauses, shows chapter progress, and steps 0.6× / 1× / 1.6×. Any touch pauses it. Only Play resumes it. The bar steps aside while the title and capsule are up. Switching to 纸白 pauses playback.
 
 **Home, besides the shelf**
-- **预测生词:** a one-minute calibration test, then footnotes ahead of time for words the reader probably does not know. Learned on the device from lookups, 撤回 and reading. Settings: 关 / 少 / 多. Default 少.
-- **Import:** a file (EPUB 2/3 without DRM, or UTF-8 TXT) or a pasted link. A link is fetched by our own worker, then stored as a book.
-- **DeepSeek key card:** enter, check, show, clear the key used by the grammar drawer and 旁注.
+- **预测生词:** a one-minute calibration test, then lighter footnotes ahead of time for words the reader probably does not know. Learned on the device from lookups, 撤回 and reading. Settings: 关 / 少 / 多. Default 少. Predictions do not require 保存.
+- **Import:** a file (EPUB 2/3 without DRM, or UTF-8 TXT) or a pasted link. A link is fetched by our own worker, then stored as a book. Link import is still web-only.
 
 **Network.** Everything else is offline (fonts, dictionary, bundled books). The only requests are `https://api.deepseek.com` after a tap on a grammar droplet or a question in 旁注, and our worker's `POST /api/fetch` after a link is submitted. No accounts, sync, push or analytics SDK.
 
@@ -186,7 +187,7 @@ ramp = max(1, H/2 - half)
 d    = |lineCenterY - viewportCenterY|
 t    = clamp((d - half) / ramp, 0, 1)
 blur    = blurMax * t              // blurMax default 7
-opacity = 1 - 0.85 * t
+opacity = 1 - 0.55 * t          // paper; night stays 1 - 0.92 * t. As built wins if this line and the formula above disagree.
 sentenceMode: t = min(1, t + 0.18) for lines outside the current sentence
 ```
 **Performance** (budget ≤ 4ms per frame, 60fps on mid-range devices, < 2% dropped frames):

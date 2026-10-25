@@ -13,10 +13,10 @@
 
 <h1 style="margin:0 0 10px;font:500 34px/1.2 'Newsreader',Georgia,serif;letter-spacing:-.01em;color:#16150f">聚焦阅读 · MVP 设计与范围</h1>
 <p style="margin:0 0 6px;font:400 13px/1.6 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:.04em;color:rgba(22,21,15,.6)">Scope · UI specification · Agent drawer — 一份文档</p>
-<p style="margin:0 0 26px;font:400 12px/1.6 'IBM Plex Mono',ui-monospace,monospace;color:rgba(22,21,15,.55)">v4 · 2026-10-25 · 与已上线的 Spotlight 对齐 · 源文件 <a href="聚焦阅读 App.dc.html">聚焦阅读 App.dc.html</a> · 技术架构见 <a href="MVP 技术架构图 · 聚焦阅读.dc.html">MVP 技术架构图</a></p>
+<p style="margin:0 0 26px;font:400 12px/1.6 'IBM Plex Mono',ui-monospace,monospace;color:rgba(22,21,15,.55)">v5 · 2026-10-26 · 阅读摩擦对齐实现 · 源文件 <a href="聚焦阅读 App.dc.html">聚焦阅读 App.dc.html</a> · 技术架构见 <a href="MVP 技术架构图 · 聚焦阅读.dc.html">MVP 技术架构图</a></p>
 <div style="border-top:2px solid #16150f;border-bottom:1px solid rgba(22,21,15,.14);padding:16px 0;margin:0 0 26px;break-inside:avoid">
-<p style="margin:0 0 10px;font:400 14.5px/1.72 'Noto Sans SC',system-ui,sans-serif;color:#16150f;text-wrap:pretty">产品定义：一个把注意力当作第一资源的英文阅读器。屏幕中央是一条固定的清晰带，其余文本按距离衰减；点任意单词从纸面裂开一条抽屉给出释义，查过的词在词下留一枚 9px 汉字脚注。</p>
-<p style="margin:0 0 10px;font:400 14.5px/1.72 'Noto Sans SC',system-ui,sans-serif;color:#16150f;text-wrap:pretty">当前产品是首页加阅读页。首页有纸白 / 夜读胶囊、继续阅读、书架、预测生词和 DeepSeek 钥匙。阅读页在纸白用 4a，夜读用 1c 的颜色（版式不变），并带句级带读。语法抽屉、旁注、问旁注、链接导入都已在内。书房、生词、我和底部标签栏不做。平台是 iOS 和手机网页。网络只有两处：点语法水滴或在旁注提问时访问 api.deepseek.com，以及导入链接时访问自己的 POST /api/fetch。</p>
+<p style="margin:0 0 10px;font:400 14.5px/1.72 'Noto Sans SC',system-ui,sans-serif;color:#16150f;text-wrap:pretty">产品定义：一个把注意力当作第一资源的英文阅读器。屏幕中央是一条固定的清晰带，其余文本按距离变糊，纸白的字最淡停在 0.45。点清晰带里的词立刻裂开抽屉；模糊的词先滚到带中央再查。按下保存后，词下留下 9px 汉字脚注。预测的词也会有脚注，颜色更淡，不必先保存。</p>
+<p style="margin:0 0 10px;font:400 14.5px/1.72 'Noto Sans SC',system-ui,sans-serif;color:#16150f;text-wrap:pretty">当前产品是首页加阅读页。首页有纸白 / 夜读胶囊、继续阅读（章节用章节名）、书架和预测生词。DeepSeek 钥匙不在首页，第一次点水滴或在旁注提问时才填写。阅读页在纸白用 4a，夜读用 1c 的颜色（版式不变）。带读条在纸白和夜读都有，顶栏出现时让开。‹ 书架一直可见。语法抽屉、旁注、问旁注、链接导入都已在内。书房、生词、我和底部标签栏不做。平台是 iOS 和手机网页。网络只有两处：点语法水滴或在旁注提问时访问 api.deepseek.com，以及导入链接时访问自己的 POST /api/fetch。</p>
 <p style="margin:0 0 10px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">它要验证两件事：<strong style="font-weight:500;color:#16150f">① 焦点带能否让人读得更久、更专注；② 点词即查 + 词下脚注，能否让人不再跳出去查词典。</strong>内测时看三个数：单次阅读时长、每千词查词次数、关闭抽屉后 10 秒内继续滚动的比例。数据只记在本地日志里，由内测用户手动导出。</p>
 <p style="margin:0 0 10px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">怎么读这份文档：每个界面一张<strong style="font-weight:500;color:#16150f">实机截图</strong>，图上的红色编号对应右侧<strong style="font-weight:500;color:#16150f">标注清单</strong>，清单里给出该部件的字号、颜色、间距与行为。章节末的表格是可直接落地的参数。B9 是给 Agent／自动化工具的机读附录（JSON），字段与正文一一对应。</p>
 <p style="margin:0;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">结构：<strong style="font-weight:500;color:#16150f">A 范围与方案</strong>（做什么、验收、数据、里程碑）· <strong style="font-weight:500;color:#16150f">B UI 设计规范</strong>（每个界面的视觉与参数）· <strong style="font-weight:500;color:#16150f">C Agent 抽屉与新交互</strong>。</p>
@@ -28,12 +28,12 @@
 <div style="border-top:2px solid #c1452f;padding-top:10px">
 <div style="font:500 13px 'Noto Sans SC',sans-serif;color:#16150f;margin-bottom:8px">做</div>
 <ul style="margin:0;padding-left:18px;font:400 12.5px/1.8 'Noto Sans SC',sans-serif;color:#16150f">
-<li>首页：日期、纸白 / 夜读胶囊、继续阅读、书架、预测生词、DeepSeek 钥匙</li>
+<li>首页：日期、纸白 / 夜读胶囊、继续阅读、书架、预测生词。钥匙在第一次需要时出现</li>
 <li>导入：EPUB（无 DRM）、UTF-8 TXT，或粘贴链接</li>
 <li>打开书过场：抽出 → 展开 → 封面淡出 → 正文淡入</li>
-<li>阅读页 4a，夜读只换 1c 颜色；带读条仅夜读出现</li>
-<li>点清晰处的词：裂纸抽屉，保存与撤回</li>
-<li>9px 汉字脚注：已查词和预测词</li>
+<li>阅读页 4a，夜读只换 1c 颜色；带读条在纸白和夜读都有，顶栏出现时让开</li>
+<li>清晰带内的词立刻查；模糊的词先滚到带中央再查。抽屉里是保存和撤回。‹ 书架一直可见</li>
+<li>9px 汉字脚注：保存后的词，以及更淡的预测词。短词的注可以宽过词本身</li>
 <li>句末语法水滴与语法抽屉（译文在上）</li>
 <li>问旁注、左滑旁注（DeepSeek，按书保存）</li>
 <li>顶栏与目录 · Aa，Aa 打开阅读设置</li>
@@ -204,7 +204,7 @@
 <div style="break-before:page;margin:0 0 22px;border-top:2px solid #16150f;padding-top:12px;break-inside:avoid"><div style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#c1452f">Part B</div><div style="margin-top:4px;font:500 28px/1.2 'Newsreader',Georgia,serif;color:#16150f">UI 设计规范</div><div style="margin-top:6px;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.62)">图文对照 · 截图取自实现原型</div></div>
 <h2 style="margin:0 0 12px;font:500 22px/1.3 'Newsreader',Georgia,serif;color:#16150f">B1 · 信息架构</h2>
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 16px;break-inside:avoid">
-<div style="border-top:2px solid #c1452f;padding:9px 0 0"><div style="font:500 13px 'Noto Sans SC',sans-serif;color:#16150f">首页</div><div style="margin-top:5px;font:400 11px/1.65 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.62)">纸白 / 夜读<br>继续阅读<br>书架（在读 / 读完）<br>预测生词 · 钥匙</div></div>
+<div style="border-top:2px solid #c1452f;padding:9px 0 0"><div style="font:500 13px 'Noto Sans SC',sans-serif;color:#16150f">首页</div><div style="margin-top:5px;font:400 11px/1.65 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.62)">纸白 / 夜读<br>继续阅读<br>书架（在读 / 读完）<br>预测生词</div></div>
 <div style="border-top:2px solid rgba(22,21,15,.28);padding:9px 0 0"><div style="font:500 13px 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.45)">书房 · 不在当前产品</div><div style="margin-top:5px;font:400 11px/1.65 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.4)">记忆时间线<br>会话线程<br>它替你做的<br>档案员权限</div></div>
 <div style="border-top:2px solid rgba(22,21,15,.28);padding:9px 0 0"><div style="font:500 13px 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.45)">生词 · 不在当前产品</div><div style="margin-top:5px;font:400 11px/1.65 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.4)">词库统计<br>今日复习入口<br>词条 + 掌握标记</div></div>
 <div style="border-top:2px solid rgba(22,21,15,.28);padding:9px 0 0"><div style="font:500 13px 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.45)">我 · 不在当前产品</div><div style="margin-top:5px;font:400 11px/1.65 'Noto Sans SC',sans-serif;color:rgba(22,21,15,.4)">本周柱状图<br>四项累计<br>设置列表</div></div>
@@ -260,7 +260,7 @@
 <div style="font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:rgba(22,21,15,.62);margin-bottom:11px">图 3.1 · 焦点带默认态</div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">1</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f;orphans:3;widows:3"><strong style="font-weight:500">章节眉</strong> — 距顶 58px，IBM Plex 11px、字距 .14em、#221f1b 38%；左章节名全大写，右实时进度</div></div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">2</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">焦点带</strong> — 屏幕坐标固定在垂直中央，高度 = 屏高 × focusPct（默认 30%，约 3 行）；带内 t = 0，绝对清晰</div></div>
-<div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">3</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">衰减区</strong> — 上下各约 35%，逐行 blur 0→blurMax、opacity 1→0.15；同一条曲线驱动</div></div>
+<div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">3</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">衰减区</strong> — 上下各约 35%。blur 仍是 0→blurMax。纸白 opacity 1→0.45（1 − 0.55t），和模糊分开；夜读仍是 1 − 0.92t</div></div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">4</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">渐隐遮罩</strong> — 顶 150px（22% 处转透明）、底 130px（72% 处转实底），pointer-events:none</div></div>
 <div style="display:flex;gap:9px;margin-bottom:14px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">5</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">进度</strong> — 由滚动位置实时写入 <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">[data-pct]/[data-bar]/[data-rail]</span>，最小显示 1%</div></div>
 <div style="background:#f6f4ef;border-left:2px solid #c1452f;padding:12px 14px;font:400 11.5px/1.85 'IBM Plex Mono',ui-monospace,monospace;color:#16150f">
@@ -268,7 +268,7 @@ half = 屏高 × focusPct / 200<br>
 ramp = max(1, 屏高 / 2 − half)<br>
 d = |行中心 − 视口中心|<br>
 t = clamp((d − half) / ramp, 0, 1)<br>
-4a: blur = blurMax·t, opacity = 1 − 0.85t<br>
+4a: blur = blurMax·t, opacity = 1 − 0.55t<br>
 1c: blur = blurMax·t, opacity = 1 − 0.92t
 </div>
 </div>
@@ -291,7 +291,7 @@ t = clamp((d − half) / ramp, 0, 1)<br>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">2</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">9px 汉字脚注</strong> — 绝对定位 left:0 / top:23px，脱离文档流，行距零变化；PingFang SC 500、字距 .04em、#221f1b 60%、超宽省略号截断、pointer-events:none</div></div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">3</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">词头组</strong> — 词 Newsreader 18px/500 #f2ead9、音标 IBM Plex 11px 50%、词性 Newsreader 斜体 12px 45%</div></div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">4</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">释义</strong> — IBM Plex 13px / 行高 20px / #f2ead9 80%，单义一行，不堆词典义项</div></div>
-<div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">5</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">保存 / 撤回</strong> — 两个拟物按钮（内高光 + 1px 投影）。没有例句，没有 Examples</div></div>
+<div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">5</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">保存 / 撤回</strong> — 保存后才在全书留下脚注，按钮变为已存。撤回忘掉这个词。没有例句，没有 Examples</div></div>
 <div style="display:flex;gap:9px;margin-bottom:9px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">6</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">问旁注</strong> — 长按 380ms 把当前句送到旁注输入框上方。没有发音键</div></div>
 <div style="display:flex;gap:9px;margin-bottom:0"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">7</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">下尖角</strong> — 与上尖角镜像咬合，让抽屉看起来是从这一行「撕开」的</div></div>
 </div>
@@ -313,7 +313,7 @@ t = clamp((d − half) / ramp, 0, 1)<br>
 </table>
 
 <h2 style="margin:0 0 4px;font:500 22px/1.3 'Newsreader',Georgia,serif;color:#16150f;break-before:page">B4 · 阅读页 1c（夜读聚光 · 定稿）</h2>
-<p style="margin:0 0 18px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">与 4a 同一套版式、字号和 34px 边距，只改颜色、高光和带读。主题开关在首页胶囊，阅读设置里没有夜读行。带读条在顶栏和胶囊出现时上移让开。点页面先暂停带读，再按普通点按处理。</p>
+<p style="margin:0 0 18px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">与 4a 同一套版式、字号和 34px 边距，只改颜色、高光和带读的夜色。主题开关在首页胶囊，阅读设置里没有夜读行。带读条在纸白和夜读都出现，顶栏和胶囊出现时让开。点页面先暂停带读，再按普通点按处理。切回纸白会暂停正在播放的带读。</p>
 
 <div data-screen-id="1c.reading.drawer" data-screen-label="1c 夜读" style="display:flex;gap:22px;align-items:flex-start;margin:0 0 26px;break-inside:avoid">
 <div style="position:relative;flex:none;width:248px;border:1px solid rgba(22,21,15,.16)">
@@ -337,7 +337,7 @@ t = clamp((d − half) / ramp, 0, 1)<br>
 </div>
 
 <h2 style="margin:0 0 4px;font:500 22px/1.3 'Newsreader',Georgia,serif;color:#16150f;break-before:page">B5 · 主页 7a（当前首页）</h2>
-<p style="margin:0 0 18px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">平面色块 + 排版。日期右侧是纸白 / 夜读胶囊，夜读时整页换色、版式不变。其下是继续阅读、书架（在读 / 读完，+ 导入分为文件和链接）、预测生词、DeepSeek 钥匙。没有底栏。预测生词和钥匙在书架之下，这一屏里要往下滚才看见。图 5.2 起的书房、生词、我<strong style="font-weight:500;color:#16150f">不在当前产品</strong>，只留作弃用参考。</p>
+<p style="margin:0 0 18px;font:400 13px/1.7 'Noto Sans SC',system-ui,sans-serif;color:rgba(22,21,15,.62)">平面色块 + 排版。日期右侧是纸白 / 夜读胶囊，夜读时整页换色、版式不变。其下是继续阅读（有章节名就用章节名）、书架（在读 / 读完，+ 导入分为文件和链接）、预测生词。空书架的公版书按钮是「从这本开始」。没有底栏，没有 DeepSeek 钥匙，没有导出日志。钥匙在阅读中第一次需要时出现；导出日志在阅读设置的最后一行。图 5.2 起的书房、生词、我<strong style="font-weight:500;color:#16150f">不在当前产品</strong>，只留作弃用参考。</p>
 
 <div data-screen-id="7a.read" data-screen-label="7a 阅读" style="display:flex;gap:22px;align-items:flex-start;margin:0 0 30px;break-inside:avoid">
 <div style="position:relative;flex:none;width:248px;border:1px solid rgba(22,21,15,.16)">
@@ -356,7 +356,7 @@ t = clamp((d − half) / ramp, 0, 1)<br>
 <div style="display:flex;gap:9px;margin-bottom:8px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">3</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">进度</strong> — 2px 轨 + 强调色填充 + 右侧百分比；下一行「还剩约 N 分钟」</div></div>
 <div style="display:flex;gap:9px;margin-bottom:8px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">4</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">导入</strong> — 「+ 导入」打开底部面板，文件和链接两个入口</div></div>
 <div style="display:flex;gap:9px;margin-bottom:8px"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">5</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">在读 / 读完</strong> — 没有「想读」。选中项有强调色下划线</div></div>
-<div style="display:flex;gap:9px;margin-bottom:0"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">6</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">书架行</strong> — 46 × 64px 平面封面 + 书名 Newsreader 18px + 作者。读完项进度变淡。再往下是预测生词和 DeepSeek 钥匙，没有标签栏</div></div>
+<div style="display:flex;gap:9px;margin-bottom:0"><div style="flex:none;width:17px;height:17px;border-radius:9px;background:#c1452f;color:#fff;font:600 10px/17px 'IBM Plex Sans',sans-serif;text-align:center">6</div><div style="flex:1;font:400 12.5px/1.6 'Noto Sans SC',sans-serif;color:#16150f"><strong style="font-weight:500">书架行</strong> — 46 × 64px 平面封面 + 书名 Newsreader 18px + 作者。读完项进度变淡。再往下是预测生词，没有钥匙，没有标签栏</div></div>
 </div>
 </div>
 
@@ -522,7 +522,7 @@ t = clamp((d − half) / ramp, 0, 1)<br>
     "bookOut": 220, "bookExpand": 460, "coverFade": 300, "pageFade": 320, "toggle": 220 },
   "focusBand": { "formula": "t = clamp((|lineMid - viewMid| - half) / ramp, 0, 1)",
     "half": "H * focusPct / 200", "ramp": "max(1, H/2 - half)",
-    "4a": { "blur": "blurMax*t", "opacity": "1 - 0.85t" },
+    "4a": { "blur": "blurMax*t", "opacity": "1 - 0.55t" },
     "1c": { "blur": "blurMax*t", "opacity": "1 - 0.92t", "focusColor": "accent" },
     "sentenceMode": "非当前句 t += 0.18，当前句强制 t = 0" },
   "footnote": { "size": 9, "weight": 500, "font": "PingFang SC",
