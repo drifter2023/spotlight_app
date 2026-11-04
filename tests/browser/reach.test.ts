@@ -144,12 +144,21 @@ describe('reader reach and the guide bar', () => {
     await mount();
     expect(prefs.get().theme).toBe('paper');
     expect(document.querySelector('.gd-bar')).toBeTruthy();
+    expect(document.querySelector('.rd-guide')).toBeNull();
     await prefs.set('theme', 'night');
     await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
+    expect(document.querySelector('.gd-bar')).toBeNull();
+    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(false);
+    clickAt(window.innerWidth / 2, 64);
+    await frames(1);
+    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(true);
+    expect(document.querySelector('.gd-bar')).toBeNull();
+    clickAt(window.innerWidth / 2, 64);
+    await frames(1);
     await prefs.set('theme', 'paper');
     await frames(1);
     expect(document.querySelector('.gd-bar')).toBeTruthy();
+    expect(document.querySelector('.rd-guide')).toBeNull();
 
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
     const held = scroller.scrollTop;

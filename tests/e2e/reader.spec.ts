@@ -16,6 +16,36 @@ test('makes no network requests outside the app origin, through home, reading an
   expect(foreign).toEqual([]);
 });
 
+test('a wide window keeps the reading column to a book measure; a phone stays full width', async ({ page }) => {
+  await fullTier(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/?book=gatsby');
+  await ready(page);
+  const wide = await page.evaluate(() => {
+    const column = document.querySelector('.rd-column')!.getBoundingClientRect();
+    const scroll = document.querySelector('.rd-scroll')!.getBoundingClientRect();
+    const pageBox = document.querySelector('.rd-page')!.getBoundingClientRect();
+    const line = document.querySelector<HTMLElement>('.rd-line[data-p]')!;
+    return {
+      column: Math.round(column.width),
+      scroll: Math.round(scroll.width),
+      page: Math.round(pageBox.width),
+      centered: Math.round(column.left) === Math.round(pageBox.width - column.right),
+      line: Math.round(line.getBoundingClientRect().width),
+    };
+  });
+  expect(wide.column).toBe(720);
+  expect(wide.scroll).toBe(720);
+  expect(wide.page).toBe(1600);
+  expect(wide.centered).toBe(true);
+  expect(wide.line).toBeLessThan(720 - 60); // inside the 34 px side padding
+
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.waitForTimeout(200);
+  const phone = await page.evaluate(() => Math.round(document.querySelector('.rd-column')!.getBoundingClientRect().width));
+  expect(phone).toBe(402);
+});
+
 test('opens The Great Gatsby with the chapter eyebrow and 1%', async ({ page }) => {
   await page.goto('/?book=gatsby');
   await ready(page);

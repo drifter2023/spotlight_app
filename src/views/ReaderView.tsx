@@ -168,7 +168,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   /** Any touch on the page (or a wheel) pauses 带读; the bar's own controls do not. Tap rules then run as usual. */
   const pauseOnTouch = (e: { target: EventTarget | null }) => {
     const g = guideRef.current;
-    if (g?.playing && !(e.target instanceof Element && e.target.closest('.gd-bar'))) g.pause('touch');
+    if (g?.playing && !(e.target instanceof Element && e.target.closest('.gd-bar, .rd-guide'))) g.pause('touch');
   };
   const fillRef = (el: HTMLElement | null) => {
     guideFill.current = el;
@@ -230,6 +230,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     <AgentDrawer db={session.db} book={book} engine={engineRef} open={agentOpen} panelRef={panelRef}
       attachment={attachment} onAttachment={setAttachment} />
     <div ref={pageRef} className={prefs.focusBlur ? 'rd-page' : 'rd-page rd-clear'} style={vars} onClick={onTap}>
+      <div className="rd-column">
       <div ref={scrollRef} data-testid="reader-scroll" />
       {prefs.tier === 'fallback' && prefs.focusBlur && (
         <>
@@ -246,8 +247,9 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       </div>
       {lookup.drawer}
       {selection.ui}
-      {/* Steps aside while the top bar and capsule are up (owner decision 2026-10-20). */}
-      {!chrome && (
+      {/* 纸白 keeps the bar, and it steps aside while the title and capsule are up.
+          夜读 has only the play button beside the capsule. */}
+      {prefs.theme !== 'night' && !chrome && (
         <GuideBar playing={guiding} speed={prefs.guideSpeed} faded={guiding && barFaded} fillRef={fillRef}
           onPlay={() => { showChrome(false); guideRef.current?.play(); }}
           onPause={() => guideRef.current?.pause('user')}
@@ -259,6 +261,11 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
         onBack={back}
         onToc={() => { showChrome(false); setSheet('toc'); }}
         onSettings={() => { showChrome(false); setSheet('settings'); }}
+        guide={prefs.theme === 'night' ? {
+          playing: guiding,
+          onPlay: () => { showChrome(true); guideRef.current?.play(); },
+          onPause: () => guideRef.current?.pause('user'),
+        } : null}
       />
       {sheet && (
         <div
@@ -286,6 +293,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       {probing && <p className="rd-probing">正在适配这台设备…</p>}
       {devTools && <FpsMeter engine={engineRef} />}
       {devTools && <DevPanel prefs={session.prefs} />}
+      </div>
       <div ref={dimRef} className="ag-dim" />
       <div ref={shieldRef} className="ag-shield" />
     </div>

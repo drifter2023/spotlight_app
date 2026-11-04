@@ -7,7 +7,7 @@ const bar = (page: Page) => page.getByRole('group', { name: '带读' });
 const play = (page: Page) => page.getByRole('button', { name: '开始带读' });
 const guide = (page: Page) => page.evaluate(() => { const g = window.__spotlight!.guide!; return { playing: g.playing, current: g.current }; });
 
-/** Opens Gatsby in 夜读 with the dev handle. */
+/** Opens Gatsby in 夜读 with the dev handle. The play button is hidden until the capsule is up. */
 async function night(page: Page, speed: 0.6 | 1 | 1.6 = 1) {
   await fullTier(page);
   await page.goto('/?book=gatsby&dev=1');
@@ -16,40 +16,51 @@ async function night(page: Page, speed: 0.6 | 1 | 1.6 = 1) {
     await window.__spotlight!.prefs.set('theme', 'night');
     await window.__spotlight!.prefs.set('guideSpeed', speed);
   }, speed);
-  await expect(bar(page)).toBeVisible();
+  await expect(bar(page)).toHaveCount(0);
 }
 
-test('N1/N5: the 带读 bar shows in 纸白 and 夜读, and steps aside while the top bar and capsule are up', async ({ page }) => {
+/** Shows the capsule, which is where 夜读 keeps Play. */
+async function showPlay(page: Page) {
+  await tapTitle(page);
+  await expect(play(page)).toBeVisible();
+}
+
+test('N1/N5: 纸白 keeps the 带读 bar, which steps aside while chrome is up; 夜读 has a play button beside the capsule', async ({ page }) => {
   await fullTier(page);
   await page.goto('/?book=gatsby&dev=1');
   await ready(page);
   await expect(bar(page)).toBeVisible();
-  await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
-  await expect(bar(page)).toBeVisible();
-  await expect(page.locator('.rd-vignette')).toBeVisible();
   await tapTitle(page);
   await expect(page.locator('.rd-capsule')).toHaveClass(/rd-chrome-on/);
   await expect(bar(page)).toHaveCount(0);
   await tapTitle(page);
   await expect(bar(page)).toBeVisible();
+
+  await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
+  await expect(page.locator('.rd-vignette')).toBeVisible();
+  await expect(bar(page)).toHaveCount(0);
+  await expect(play(page)).toHaveCount(0);
+  await showPlay(page);
+  const capsule = (await page.locator('.rd-capsule').boundingBox())!;
+  const button = (await page.locator('.rd-guide').boundingBox())!;
+  expect(Math.abs(button.y - capsule.y)).toBeLessThan(1);
+  expect(button.x + button.width).toBeLessThanOrEqual(capsule.x);
+  expect(capsule.x - (button.x + button.width)).toBeLessThanOrEqual(16);
+  await tapTitle(page);
+  await expect(play(page)).toHaveCount(0);
+  await expect(bar(page)).toHaveCount(0);
 });
 
 test('N4/NM-05: Play lights the sentence at the centre; a touch on the page pauses at once, and nothing resumes without Play', async ({ page }) => {
   await night(page);
+  await showPlay(page);
   const atCentre = await page.evaluate(() => window.__spotlight!.engine.sentenceAtCentre());
   await play(page).click();
   expect(await guide(page)).toEqual({ playing: true, current: atCentre });
   await expect(page.getByRole('button', { name: '暂停带读' })).toHaveAttribute('aria-pressed', 'true');
-  // The bar fades after 3 s while playing and lets touches through.
-  await expect(bar(page)).toHaveAttribute('data-faded', 'true', { timeout: 4500 });
-  await expect(bar(page)).toHaveCSS('pointer-events', 'none');
-  // A touch anywhere on the page (even where the faded bar is) pauses within the same frame.
-  const box = await bar(page).boundingBox();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-  await page.mouse.down();
+  // A touch on the page pauses within the same frame. The play button's own pointer does not.
+  await page.locator('.rd-page').dispatchEvent('pointerdown', { bubbles: true, clientX: 8, clientY: 240 });
   expect((await guide(page)).playing).toBe(false);
-  await page.mouse.up();
-  await expect(bar(page)).toHaveAttribute('data-faded', 'false');
   await expect(play(page)).toBeVisible();
   await page.waitForTimeout(7000);
   expect((await guide(page)).playing).toBe(false);
@@ -57,6 +68,7 @@ test('N4/NM-05: Play lights the sentence at the centre; a touch on the page paus
 
 test('NM-05: hiding the app, opening settings and switching to 纸白 each pause 带读', async ({ page }) => {
   await night(page);
+  await showPlay(page);
   const hide = () => page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -69,11 +81,14 @@ test('NM-05: hiding the app, opening settings and switching to 纸白 each pause
   await play(page).click();
   await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'paper'));
   expect((await guide(page)).playing).toBe(false);
+  await expect(bar(page)).toHaveCount(0); // the capsule is still up, so the paper bar steps aside
+  await tapTitle(page);
   await expect(bar(page)).toBeVisible();
 
   await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
+  await showPlay(page);
   await play(page).click();
-  await tapTitle(page); // a touch: pauses, then the tap rules show the menu
+  await page.locator('.rd-page').dispatchEvent('pointerdown', { bubbles: true, clientX: 8, clientY: 240 });
   expect((await guide(page)).playing).toBe(false);
   await page.getByRole('button', { name: '阅读设置' }).click();
   await expect(page.getByRole('dialog', { name: '阅读设置' })).toBeVisible();
@@ -82,6 +97,7 @@ test('NM-05: hiding the app, opening settings and switching to 纸白 each pause
 
 test('N4: after its dwell the next sentence is lit and scrolled to the centre', async ({ page }) => {
   await night(page, 1.6);
+  await showPlay(page);
   await play(page).click();
   const first = (await guide(page)).current!;
   const { dwell, next } = await page.evaluate((id) => {
@@ -116,40 +132,32 @@ test('NM-06: at the chapter’s last sentence 带读 stops, paused, in the same 
   await page.waitForTimeout(400);
   const start = await page.evaluate(() => window.__spotlight!.engine.sentenceAtCentre()!);
   expect(start.chapter).toBe(0);
-  // Play from the chapter's last sentence (or the one before it).
+  // Play from the chapter's last sentence (or the one before it). Scrolling hides the capsule.
+  await showPlay(page);
   await play(page).click();
   await expect.poll(async () => (await guide(page)).playing, { timeout: 30_000, intervals: [500] }).toBe(false);
   const anchor = await page.evaluate(() => window.__spotlight!.engine.currentAnchor());
   expect(anchor.chapter).toBe(0);
+  if (!(await page.locator('.rd-capsule').evaluate((el) => el.classList.contains('rd-chrome-on')))) await tapTitle(page);
   await expect(play(page)).toBeVisible();
 });
 
-test('NM-08: bar controls have 44 px targets, and the speed labels and paused glyph reach 4.5:1 on the night page', async ({ page }) => {
+test('NM-08: the night play button is a 44 px target and its glyph reaches 4.5:1 on the night page', async ({ page }) => {
   await night(page);
-  const targets = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.gd-bar button')].map((b) => {
-    const r = b.getBoundingClientRect();
-    return [r.width, r.height];
-  }));
-  expect(targets).toHaveLength(4);
-  for (const [w, h] of targets) { expect(h).toBeGreaterThanOrEqual(44); expect(w).toBeGreaterThanOrEqual(44); }
-  // Contrast of the label colours composited over the bar (white 7 % on #0e0e10).
+  await showPlay(page);
+  const box = (await page.locator('.rd-guide').boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
   const ratio = await page.evaluate(() => {
     const rgb = (s: string) => s.match(/[\d.]+/g)!.map(Number);
     const over = (fg: number[], bg: number[]) => { const a = fg[3] ?? 1; return [0, 1, 2].map((i) => fg[i]! * a + bg[i]! * (1 - a)); };
     const lum = (c: number[]) => { const [r, g, b] = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
     const contrast = (a: number[], b: number[]) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x! + 0.05) / (y! + 0.05); };
-    const page = [14, 14, 16];
-    const barBg = over([255, 255, 255, 0.07], page);
-    const label = document.querySelector<HTMLElement>('.gd-speeds button[aria-checked="false"] span')!;
-    const disc = document.querySelector<HTMLElement>('.gd-play-disc')!;
-    const discBg = over(rgb(getComputedStyle(disc).backgroundColor), barBg);
-    return {
-      label: contrast(over(rgb(getComputedStyle(label).color), barBg), barBg),
-      glyph: contrast(over(rgb(getComputedStyle(disc).color), discBg), discBg),
-    };
+    const btn = document.querySelector<HTMLElement>('.rd-guide')!;
+    const bg = over(rgb(getComputedStyle(btn).backgroundColor), [14, 14, 16]);
+    return contrast(over(rgb(getComputedStyle(btn).color), bg), bg);
   });
-  expect(ratio.label).toBeGreaterThanOrEqual(4.5);
-  expect(ratio.glyph).toBeGreaterThanOrEqual(4.5);
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
 });
 
 test('NM-09: the word drawer at night uses the 1c material with the headword in the accent, and opens like 4a', async ({ page }) => {
@@ -165,12 +173,16 @@ test('NM-09: the word drawer at night uses the 1c material with the headword in 
 });
 
 test('NM-10: 夜读 and the 带读 speed survive a reload', async ({ page }) => {
-  await night(page);
+  await fullTier(page);
+  await page.goto('/?book=gatsby&dev=1');
+  await ready(page);
   await bar(page).getByRole('radio', { name: '1.6×' }).click();
   await expect(bar(page).getByRole('radio', { name: '1.6×' })).toHaveAttribute('aria-checked', 'true');
+  await page.evaluate(() => window.__spotlight!.prefs.set('theme', 'night'));
   await page.waitForTimeout(800); // the web db is written to IndexedDB 300 ms after the last change
   await page.reload();
   await ready(page);
-  await expect(bar(page).getByRole('radio', { name: '1.6×' })).toHaveAttribute('aria-checked', 'true');
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('night');
+  expect(await page.evaluate(() => window.__spotlight!.prefs.get().guideSpeed)).toBe(1.6);
+  await expect(bar(page)).toHaveCount(0);
 });

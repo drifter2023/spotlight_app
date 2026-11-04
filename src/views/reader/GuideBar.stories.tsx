@@ -4,9 +4,9 @@ import { Phone, ReaderPage } from '../_stories/Phone.tsx';
 import { GuideBar } from './GuideBar.tsx';
 
 /**
- * 带读 control bar (夜读 only, NIGHT_MODE_1c.md → N5): play / pause, the reading progress and the speed
- * (0.6× / 1× / 1.6×). Paused it stays; playing, it fades out after 3 s and the first touch on the page
- * pauses. While 带读 plays, only the lit sentence is sharp and in the accent.
+ * 带读 bar in 纸白: play / pause, the reading progress and the speed (0.6× / 1× / 1.6×).
+ * 夜读 uses the play button beside the capsule instead. Paused, the bar stays; playing, it fades
+ * out after 3 s and the first touch on the page pauses. While 带读 plays, only the lit sentence is sharp.
  */
 const meta = {
   title: 'Reader/带读 GuideBar',

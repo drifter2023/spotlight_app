@@ -10,6 +10,7 @@ import { ReaderChrome } from './ReaderChrome.tsx';
  * A tap in the title area (the top of the page down to just below the eyebrow, even on a word), on
  * blank space or at the page edge shows or hides them; a tap on text, blurred or sharp, only hides
  * them; they also fade after 3 s or on scroll (owner decisions 2026-10-15, owner request 2026-10-20).
+ * In 夜读 a play button sits just to the left of the capsule and fades with it.
  */
 const meta = {
   title: 'Reader/顶部栏与胶囊 ReaderChrome',
@@ -24,6 +25,18 @@ export const Shown: Story = {};
 
 /** ‹ 书架 stays tappable while the title and capsule are hidden. */
 export const BackWhileCapsuleHidden: Story = { args: { visible: false } };
+
+/** 夜读: play sits beside 目录 · Aa and shows with the capsule. */
+export const NightPlay: Story = {
+  globals: { theme: 'night' },
+  args: { guide: { playing: false, onPlay: fn(), onPause: fn() } },
+};
+
+/** The same button, pressed, while 带读 is playing. */
+export const NightPlaying: Story = {
+  globals: { theme: 'night' },
+  args: { guide: { playing: true, onPlay: fn(), onPause: fn() } },
+};
 
 /** Tap the margins or the gaps between paragraphs to show or hide them; a tap on a line only hides them. */
 export const TapBlank: Story = {

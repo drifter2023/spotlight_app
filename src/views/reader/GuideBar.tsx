@@ -2,9 +2,9 @@ import type { Ref } from 'react';
 import { GUIDE_SPEEDS, type GuideSpeed } from '../../core/prefs/prefs.ts';
 
 /**
- * 带读 control bar (NIGHT_MODE_1c.md → N5), 夜读 only: play / pause, the reading progress, the speed.
- * Its taps are its own and never reach the reader's tap rules. While playing it fades out after 3 s
- * and lets touches through to the page, where the first one pauses (and brings it back).
+ * 带读 control bar in 纸白: play / pause, the reading progress, the speed.
+ * 夜读 has only the play button beside the capsule. Taps here never reach the reader's tap rules.
+ * While playing it fades out after 3 s and lets touches through to the page, where the first one pauses.
  */
 export function GuideBar({ playing, speed, faded, fillRef, onPlay, onPause, onSpeed }: {
   playing: boolean; speed: GuideSpeed; faded: boolean;
