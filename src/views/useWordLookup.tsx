@@ -8,7 +8,7 @@ import type { Db } from '../core/db/types.ts';
 import type { DictService, LookupResult } from '../core/dict/service.ts';
 import { GrammarService, type GrammarRun, type RunState } from '../core/grammar/service.ts';
 import { logMetric } from '../core/metrics/metrics.ts';
-import { MOTION } from '../core/motion.ts';
+import { ease, MOTION } from '../core/motion.ts';
 import type { PrefsStore } from '../core/prefs/prefs.ts';
 import type { EngineBook, ReaderEngine, SentenceHit, WordHit } from '../core/reader/engine.ts';
 import { bookLemmas, VocabModel } from '../core/vocab/model.ts';
@@ -78,6 +78,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const recording = useRef<Promise<void>>(Promise.resolve());
   const timers = useRef<number[]>([]);
   const closedAt = useRef<{ at: number; timer: number } | null>(null);
+  /** How far keep-on-screen pushed the page for the open drawer: from where, to where (review M2). */
+  const pushed = useRef<{ host: HTMLElement; from: number; target: number } | null>(null);
   /** One service per open book, so reopening a sentence that is still streaming joins its run. */
   const grammar = useMemo(() => new GrammarService(db), [db]);
   /** Stops following the open grammar run (its updates and its drawer's growth). */
@@ -163,7 +165,35 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const scroller = engine.current?.scroller;
     if (!scroller || !host.isConnected) return;
     const over = host.getBoundingClientRect().bottom - (scroller.getBoundingClientRect().bottom - KEEP_BOTTOM);
-    if (over > 8) scroller.scrollTo({ top: scroller.scrollTop + over, behavior: 'smooth' });
+    if (over <= 8) return;
+    const target = Math.min(scroller.scrollHeight - scroller.clientHeight, scroller.scrollTop + over);
+    const prev = pushed.current;
+    pushed.current = { host, from: prev?.host === host ? prev.from : scroller.scrollTop, target };
+    scroller.scrollTo({ top: target, behavior: 'smooth' });
+  };
+
+  /**
+   * As a drawer that keep-on-screen pushed up closes, the page eases back by the same distance, so the
+   * band holds the sentence the reader was in again (review M2). Skipped if the page has moved since
+   * the push (the reader scrolled), and stopped by any scroll that is not ours.
+   */
+  const settleBack = (host: HTMLElement) => {
+    const push = pushed.current;
+    pushed.current = null;
+    const scroller = engine.current?.scroller;
+    if (!push || push.host !== host || !scroller || Math.abs(scroller.scrollTop - push.target) > 2) return;
+    const start = scroller.scrollTop;
+    const t0 = performance.now();
+    let last = start;
+    const step = () => {
+      if (Math.abs(scroller.scrollTop - last) > 1) return; // someone else scrolled
+      const k = Math.min(1, (performance.now() - t0) / MOTION.drawerClose);
+      last = start + (push.from - start) * ease(k);
+      scroller.scrollTop = last;
+      last = scroller.scrollTop;
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   };
 
   const resolve = (hit: WordHit): Pick<Pop, 'state' | 'result' | 'predicted'> => {
@@ -297,6 +327,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     unfollow.current?.(); // the run goes on without the drawer and still stores its answer
     setPop({ ...p, closing: true });
     trackGap(p.host, MOTION.drawerClose);
+    settleBack(p.host);
     if (closedAt.current) clearTimeout(closedAt.current.timer);
     closedAt.current = {
       at: performance.now(),
@@ -343,6 +374,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       }
       if (p && !p.closing) {
         if (ev.cancelable) ev.preventDefault();
+        pushed.current = null; // the reader is scrolling on: do not ease the page back (review M2)
         close();
         lockUntil.current = performance.now() + SCROLL_LOCK_MS;
         return;

@@ -213,6 +213,25 @@ describe('reader reach and the guide bar', () => {
     expect(drawer()).toBeNull();
   }, 15_000);
 
+  it('a drawer that pushed the page up lets it settle back as it closes (review M2)', async () => {
+    await prefs.set('focusBlur', false); // any line opens, so a word low on the page can be tapped
+    await mount();
+    const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
+    const box = scroller.getBoundingClientRect();
+    const line = lineAt(scroller, box.bottom - 130);
+    const p = wordPoint(line, 0)!;
+    const y0 = line.getBoundingClientRect().top;
+    const top0 = scroller.scrollTop;
+    clickAt(p.x, p.y);
+    await sleep(900); // open (330 ms) and the smooth keep-on-screen scroll
+    expect(drawer()).toBeTruthy();
+    expect(scroller.scrollTop, 'the drawer pushed the page up').toBeGreaterThan(top0 + 8);
+    clickAt(window.innerWidth / 2, 64); // a tap in the title area only closes it, never opens another word
+    await sleep(600);
+    expect(drawer()).toBeNull();
+    expect(Math.abs(line.getBoundingClientRect().top - y0)).toBeLessThanOrEqual(1);
+  });
+
   it('opens a sharp word at once, and scrolls a blurred word into the band before opening it', async () => {
     await mount();
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
