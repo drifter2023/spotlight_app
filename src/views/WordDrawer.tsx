@@ -218,7 +218,7 @@ export function GrammarDrawer({ closing, run, x, onRetry, db }: {
             )}
           </div>
           {keyReason && db && keyOpen && (
-            <AiKeyCard db={db} place="leather" initiallyEditing={keyReason === 'invalid-key'} onSaved={onRetry} />
+            <AiKeyCard db={db} place="leather" title="语法分析需要 DeepSeek Key" initiallyEditing={keyReason === 'invalid-key'} onSaved={onRetry} />
           )}
         </>
       )}

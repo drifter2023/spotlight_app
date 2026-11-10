@@ -68,7 +68,7 @@ export async function saveDeepSeekKey(page: Page, key = 'sk-e2e-good') {
   const d = await dropInBand(page, 0, 0);
   await page.mouse.click(d.x, d.y);
   await page.getByRole('button', { name: '填写 Key' }).click();
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
+  const card = page.getByRole('region', { name: '语法分析需要 DeepSeek Key' });
   await card.getByLabel('DeepSeek API Key').fill(key);
   await card.getByRole('button', { name: '确认' }).click();
   await expect(page.locator('.wd-miss')).toHaveText('DeepSeek 暂时不可用，请稍后再试');
