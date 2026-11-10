@@ -268,8 +268,9 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       {lookup.drawer}
       {selection.ui}
       {/* 纸白 keeps the bar, and it steps aside while the title and capsule are up.
-          夜读 has only the play button beside the capsule. */}
-      {prefs.theme !== 'night' && !chrome && (
+          夜读 has only the play button beside the capsule. Nothing sits on the page during the
+          first-launch probe, whose notice would otherwise lie under the bar (review S10). */}
+      {prefs.theme !== 'night' && !chrome && !probing && (
         <GuideBar playing={guiding} speed={prefs.guideSpeed} faded={guiding && barFaded} fillRef={fillRef}
           onPlay={() => { showChrome(false); guideRef.current?.play(); }}
           onPause={() => guideRef.current?.pause('user')}
