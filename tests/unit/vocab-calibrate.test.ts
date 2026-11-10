@@ -53,7 +53,7 @@ describe('calibration test (P-06)', () => {
 
   it('always finds 24 items, whatever the draw', () => {
     for (let seed = 1; seed <= 25; seed++) expect(pickItems(dict.levels(), of, senseOf, seeded(seed))).toHaveLength(24);
-  });
+  }, 30_000); // 25 draws over the full dictionary: about 2 s here, past the 5 s default on a CI runner
 
   it('the right answer lands in different places', () => {
     expect(new Set(items.map((i) => i.answer)).size).toBe(4);
