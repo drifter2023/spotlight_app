@@ -124,7 +124,8 @@
 :root[data-theme='night'] .rd-ask-dot { background: var(--paper); }
 .rd-drop {
   position: absolute; left: 0; top: 0; width: 6px; height: 6px; /* placed by transform */
-  border-radius: 0 50% 50% 50%; background: rgba(var(--reader-ink-rgb), .42); /* a drop, point up (rotated 45°) */
+  border-radius: 0 50% 50% 50%; background: rgba(var(--reader-ink-rgb), .55); /* a drop, point up (rotated 45°) */
+  box-shadow: 0 0 0 2px var(--paper); /* a paper halo, so it reads over a footnote gloss (review S6) */
   animation: dropIn 220ms var(--ease); transition: opacity 220ms var(--ease);
 }
 .rd-drop-off { opacity: 0; }
