@@ -215,17 +215,22 @@ describe('reader reach and the guide bar', () => {
   }, 15_000);
 
   it('a drawer that pushed the page up lets it settle back as it closes (review M2)', async () => {
-    await prefs.set('focusBlur', false); // any line opens, so a word low on the page can be tapped
     await mount();
+    await prefs.set('focusBlur', false); // any line opens, so a word low on the page can be tapped
+    await frames(2);
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
     const box = scroller.getBoundingClientRect();
-    const line = lineAt(scroller, box.bottom - 130);
+    // The lowest line clear of the bottom edge and the 带读 bar: its drawer runs past the screen.
+    const line = [...scroller.querySelectorAll<HTMLElement>('.rd-line[data-p]')]
+      .filter((l) => { const b = l.getBoundingClientRect(); return b.top > box.top + box.height / 2 && b.bottom < box.bottom - 140 && /\w/.test(l.textContent ?? ''); })
+      .pop()!;
+    expect(line, 'a low line').toBeTruthy();
     const p = wordPoint(line, 0)!;
     const y0 = line.getBoundingClientRect().top;
     const top0 = scroller.scrollTop;
     clickAt(p.x, p.y);
+    await expect.poll(drawer, { timeout: 4000 }).toBeTruthy();
     await expect.poll(() => scroller.scrollTop, { timeout: 4000 }).toBeGreaterThan(top0 + 8); // keep-on-screen pushed up
-    expect(drawer()).toBeTruthy();
     let held = -1;
     await expect.poll(() => { const t = scroller.scrollTop; const same = t === held; held = t; return same; }, { interval: 150, timeout: 4000 }).toBe(true); // the smooth scroll ended
     clickAt(window.innerWidth / 2, 64); // a tap in the title area only closes it, never opens another word
