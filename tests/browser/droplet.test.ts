@@ -65,9 +65,11 @@ describe('grammar droplets', () => {
     const before = shown(el).map((d) => d.dataset.at).join();
     el.scrollTop += 300;
     e.paintNow();
+    // paintNow marks the droplets that left the band at once, and removes them 250 ms later.
+    // Check before awaiting: two frames on a slow runner can take longer than that.
+    expect(el.querySelectorAll('.rd-drop-off').length).toBeGreaterThan(0);
     await frames(2);
     expect(shown(el).map((d) => d.dataset.at).join()).not.toBe(before);
-    expect(el.querySelectorAll('.rd-drop-off').length).toBeGreaterThan(0);
     expect(el.querySelectorAll('.rd-line .rd-drop').length).toBe(0);
     await new Promise((r) => setTimeout(r, 300));
     expect(el.querySelectorAll('.rd-drop-off').length).toBe(0); // faded ones are removed

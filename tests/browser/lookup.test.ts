@@ -71,8 +71,10 @@ describe('footnotes (R-06)', () => {
       }
       return out;
     });
+    // setAnnotator decorates the paragraphs nearest the band in a 5 ms slice now and the rest in
+    // background slices (R-01), so a slow machine may not reach 50 notes before the first await.
+    await expect.poll(() => el.querySelectorAll('.rd-fn').length).toBeGreaterThan(50);
     const notes = [...el.querySelectorAll<HTMLElement>('.rd-fn')];
-    expect(notes.length).toBeGreaterThan(50);
     expect(tops(el)).toEqual(before);
     // The gloss may extend past a short word (about six em) and still clips to a long word.
     // Either way it sits under the word, and the line's y and height stay put (above).
@@ -138,8 +140,10 @@ describe('footnotes (R-06)', () => {
   it('removing all footnotes restores plain lines', async () => {
     const { el, e } = await open();
     e.setAnnotator((_c, _p, _para, text) => [...words(text)].map((w) => ({ start: w.start, end: w.end, text: '注' })));
+    expect(el.querySelectorAll('.rd-w').length).toBeGreaterThan(0); // the first slice runs at once
     e.setAnnotator(null);
-    expect(el.querySelectorAll('.rd-w').length).toBe(0);
+    // Undecorating is sliced too (5 ms now, the rest in the background), so wait for it to finish.
+    await expect.poll(() => el.querySelectorAll('.rd-w').length).toBe(0);
   });
 });
 

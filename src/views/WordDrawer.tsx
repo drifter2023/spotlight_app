@@ -41,7 +41,12 @@ function useInnerScroll(follow: boolean) {
       mark();
     };
     const onGrow = () => {
-      if (followRef.current && stick) el.scrollTop = el.scrollHeight;
+      if (followRef.current && stick) {
+        el.scrollTop = el.scrollHeight;
+        // Our jump and a reader's scroll up in the same frame give one scroll event; measured from
+        // where we jumped to, that event still reads as an upward scroll and lets go.
+        lastTop = el.scrollTop;
+      }
       mark();
     };
     const ro = new ResizeObserver(onGrow);
