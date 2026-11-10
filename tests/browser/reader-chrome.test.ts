@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReaderChrome } from '../../src/views/reader/ReaderChrome.tsx';
+import { Sheet } from '../../src/views/reader/Sheet.tsx';
 
 let root: Root | null = null;
 afterEach(() => { root?.unmount(); root = null; document.body.innerHTML = ''; });
@@ -91,5 +92,18 @@ describe('ReaderChrome back control', () => {
     expect(capsule.getAttribute('aria-hidden')).not.toBe('true');
     expect([...capsule.querySelectorAll('button')].map((b) => b.tabIndex)).toEqual([0, 0]);
     expect(document.elementFromPoint(24, 16)?.closest('.rd-back')).toBe(back);
+  });
+});
+
+describe('Sheet grip', () => {
+  it('is a 44 px tall target (review S8)', () => {
+    const page = document.createElement('div');
+    page.className = 'rd-page';
+    page.style.cssText = 'position:relative;width:402px;height:874px';
+    document.body.append(page);
+    root = createRoot(page);
+    flushSync(() => { root!.render(createElement(Sheet, { open: true, label: '设置', onClose: () => {}, children: 'body' })); });
+    const grip = page.querySelector<HTMLElement>('.sheet-grip')!;
+    expect(grip.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   });
 });
