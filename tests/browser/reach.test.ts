@@ -196,6 +196,23 @@ describe('reader reach and the guide bar', () => {
     expect(document.querySelector('.rd-top')?.classList.contains('rd-chrome-on')).toBe(false);
   });
 
+  it('a tap on the capsule\'s place just after it fades brings it back instead of opening a word (review S3)', async () => {
+    await mount();
+    const top = () => document.querySelector('.rd-top')?.classList.contains('rd-chrome-on');
+    clickAt(window.innerWidth / 2, 64);
+    await frames(1);
+    expect(top()).toBe(true);
+    const dock = document.querySelector('.rd-dock')!.getBoundingClientRect();
+    const x = dock.left + dock.width / 2, y = dock.top + dock.height / 2;
+    await sleep(3000 + 100); // the 3 s idle fade, then 100 ms
+    expect(top()).toBe(false);
+    clickAt(x, y);
+    await frames(1);
+    expect(top()).toBe(true);
+    await sleep(700); // no word drawer opened behind it
+    expect(drawer()).toBeNull();
+  }, 15_000);
+
   it('opens a sharp word at once, and scrolls a blurred word into the band before opening it', async () => {
     await mount();
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;

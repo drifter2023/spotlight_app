@@ -26,6 +26,12 @@ export interface ReaderBook extends EngineBook { title: string }
 interface Props { session: Session; book: ReaderBook; initialAnchor: Anchor | null; onBack: () => void }
 
 const CHROME_IDLE_MS = 3000;
+/** A tap on the capsule's place this soon after it faded still counts as a tap on the capsule. */
+const DOCK_GRACE_MS = 400;
+
+function within(r: DOMRect, x: number, y: number, pad: number): boolean {
+  return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+}
 /** While 带读 plays, its bar fades out after this long (N5). */
 const GUIDE_BAR_IDLE_MS = 3000;
 const MIN_SESSION_MS = 5000;
@@ -44,6 +50,8 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const [sheet, setSheet] = useState<'settings' | 'toc' | null>(null);
   const [chapter, setChapter] = useState(initialAnchor?.chapter ?? 0);
   const chromeTimer = useRef(0);
+  /** Where the capsule was when the idle timer faded it, and when (review S3). */
+  const fadedDock = useRef<{ at: number; rect: DOMRect } | null>(null);
   const scrimDown = useRef<{ x: number; y: number } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -180,7 +188,12 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const showChrome = (on: boolean) => {
     clearTimeout(chromeTimer.current);
     setChrome(on);
-    if (on) chromeTimer.current = window.setTimeout(() => setChrome(false), CHROME_IDLE_MS);
+    fadedDock.current = null;
+    if (on) chromeTimer.current = window.setTimeout(() => {
+      const dock = shellRef.current?.querySelector('.rd-dock');
+      fadedDock.current = dock ? { at: performance.now(), rect: dock.getBoundingClientRect() } : null;
+      setChrome(false);
+    }, CHROME_IDLE_MS);
   };
   useEffect(() => {
     const el = scrollRef.current;
@@ -210,6 +223,13 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     if (action === 'drawer') {
       // Close; a tap on another word below the title area then opens it (R-05).
       lookup.onTap(e.clientX, e.clientY, e.timeStamp, e.clientY - box.top < menuH);
+      return;
+    }
+    // A tap aimed at 目录 / Aa that lands just after the idle fade brings the capsule back instead of
+    // opening the word under it (review S3).
+    const faded = fadedDock.current;
+    if (!chrome && faded && performance.now() - faded.at < DOCK_GRACE_MS && within(faded.rect, e.clientX, e.clientY, 8)) {
+      showChrome(true);
       return;
     }
     if (lookup.onTap(e.clientX, e.clientY, e.timeStamp)) { if (chrome) showChrome(false); return; }
