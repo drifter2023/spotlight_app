@@ -119,6 +119,8 @@
   --sec: rgba(var(--ink-rgb), .62);
   margin-top: 34px; padding-top: 6px; border-top: 1px solid rgba(var(--ink-rgb), .1);
 }
+/* After a shelf with rows, the last row's rule is the divider: one rule, not two 34 px apart (review S5). */
+.shelf:not(:empty) + .vocab-card { margin-top: 24px; padding-top: 14px; border-top: 0; }
 .ai-card[data-place='inline'],
 .ai-card[data-place='leather'] { margin-top: 10px; }
 .ai-card[data-place='inline'] { border-top: 0; padding-top: 0; }
