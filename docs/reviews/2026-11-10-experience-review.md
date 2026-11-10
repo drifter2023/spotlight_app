@@ -250,3 +250,16 @@ Tone today is plain and well judged — 「在页边写下你的问题」, 「�
 | — | **S9** | Only if O1 = (A): mount the bar in 夜读 while paused and drop the night play button. |
 
 Owner decisions waiting (not to be built): **O1** 带读 placement and speed control (recommend B) · **O2** first-run hint (recommend one 6 s line) · **O3** chrome idle 5 s · **O4** small-text contrast policy (recommend raising eyebrow and saved footnote; decide predicted) · **O5** 撤回 → 认识 · **O6** one night accent · **O7** update the 带读 scope line in `CLAUDE.md`/TASKS 59.
+
+---
+
+## 5. Build status (2026-11-11, branch `review/reading-experience`)
+
+Built, one commit each: S1, S3, M1, S4, S5, S6, S10, S11, S12, S7, S8, M2.
+
+Not built:
+- **S2 (show the chrome when a book opens)**: deferred. It changes the reader's start state, and about a dozen e2e steps (`reader.spec.ts`, `night.spec.ts`, `export.spec.ts`) start from "chrome hidden" and use `tapTitle` to show it. Those suites can't run in the session's sandbox (Chromium can't launch), so the change and the test updates should be made where `npm run e2e` runs. Suggested shape: an e2e-only opt-out (like `__forceTier`) in the helpers, plus one test for the greeting.
+- **S9**: waits for O1.
+- **O1–O7**: owner decisions, unchanged.
+
+Verified here: `npm run typecheck`, `npm run build` and the unit project (`npx vitest run --project unit`, 202 tests) pass. The browser and e2e tests added or changed for S1, S3, M1, S4, S7, S8, S11, S12 and M2 run in CI only.
