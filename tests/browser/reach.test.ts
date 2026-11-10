@@ -31,6 +31,23 @@ function stubDb(): Db {
   };
 }
 
+/** Colour from `#rrggbb` or `rgb(a)(…)`, alpha-composited over the page colour by the caller's choice of page. */
+function rgb(css: string): [number, number, number, number] {
+  const c = css.trim();
+  if (c.startsWith('#')) return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16), 1];
+  const n = c.match(/[\d.]+/g)!.map(Number);
+  return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
+}
+function contrast(fg: [number, number, number, number], bg: [number, number, number, number]): number {
+  const mix = fg.slice(0, 3).map((v, i) => v * fg[3] + (bg[i] ?? 0) * (1 - fg[3]));
+  const lum = (c: number[]) => {
+    const [r = 0, g = 0, b = 0] = c.map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const l1 = lum(mix), l2 = lum(bg.slice(0, 3));
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
 function wordPoint(line: HTMLElement, n: number): { x: number; y: number; word: string } | null {
   const w = [...words(line.textContent ?? '')][n];
   const node = line.firstChild;
@@ -145,6 +162,10 @@ describe('reader reach and the guide bar', () => {
     expect(prefs.get().theme).toBe('paper');
     expect(document.querySelector('.gd-bar')).toBeTruthy();
     expect(document.querySelector('.rd-guide')).toBeNull();
+    // The bar is ink on paper (review S1): speed labels and the play glyph meet 4.5 : 1 on the page.
+    const page = rgb(getComputedStyle(document.documentElement).getPropertyValue('--paper'));
+    expect(contrast(rgb(getComputedStyle(document.querySelector('.gd-speeds button:not([aria-checked="true"]) span')!).color), page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(rgb(getComputedStyle(document.querySelector('.gd-play-disc')!).color), page)).toBeGreaterThanOrEqual(4.5);
     await prefs.set('theme', 'night');
     await frames(1);
     expect(document.querySelector('.gd-bar')).toBeNull();

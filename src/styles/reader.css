@@ -255,7 +255,9 @@
 .gd-bar {
   position: absolute; left: 24px; right: 24px; bottom: calc(env(safe-area-inset-bottom) + 52px); z-index: 5;
   display: flex; align-items: center; height: 46px; padding: 0 8px 0 6px; box-sizing: border-box; border-radius: 23px;
-  background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .09);
+  /* Ink on paper (review S1): the night glass values read 1.06 : 1 here. */
+  background: rgba(var(--paper-rgb), .94); border: 1px solid rgba(var(--reader-ink-rgb), .12); color: var(--reader-ink);
+  box-shadow: 0 6px 22px rgba(var(--shadow-rgb), .16);
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   transition: opacity 400ms var(--ease);
 }
@@ -265,20 +267,20 @@
 .gd-play { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -1px -5px; }
 .gd-play-disc {
   display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
-  background: rgba(255, 255, 255, .12); color: #f2ede4; transition: background 200ms var(--ease), color 200ms var(--ease);
+  background: rgba(var(--reader-ink-rgb), .08); color: var(--reader-ink); transition: background 200ms var(--ease), color 200ms var(--ease);
 }
-.gd-play[aria-pressed='true'] .gd-play-disc { background: #f2ede4; color: #0e0e10; }
-.gd-track { flex: 1; min-width: 0; height: 2px; margin: 0 12px; border-radius: 1px; background: rgba(255, 255, 255, .14); overflow: hidden; }
-.gd-track i { display: block; width: 0; height: 100%; background: rgba(242, 237, 228, .8); }
+.gd-play[aria-pressed='true'] .gd-play-disc { background: var(--reader-ink); color: var(--paper); }
+.gd-track { flex: 1; min-width: 0; height: 2px; margin: 0 12px; border-radius: 1px; background: rgba(var(--reader-ink-rgb), .12); overflow: hidden; }
+.gd-track i { display: block; width: 0; height: 100%; background: rgba(var(--reader-ink-rgb), .72); }
 .gd-speeds { flex: none; display: flex; gap: 4px; }
 /* 44 × 44 targets around the small pills (the pills keep the design's size; only the space between them grows) */
 .gd-speeds { gap: 0; }
 .gd-speeds button { display: grid; place-items: center; min-width: 44px; height: 44px; margin: -1px 0; }
 .gd-speeds span {
   padding: 5px 9px; border-radius: 13px; font: 400 11px/1 'IBM Plex Sans', system-ui, sans-serif;
-  color: rgba(242, 237, 228, .55); transition: background 200ms var(--ease), color 200ms var(--ease);
+  color: rgba(var(--reader-ink-rgb), .62); transition: background 200ms var(--ease), color 200ms var(--ease);
 }
-.gd-speeds button[aria-checked='true'] span { background: rgba(242, 237, 228, .92); color: #0e0e10; }
+.gd-speeds button[aria-checked='true'] span { background: var(--reader-ink); color: var(--paper); }
 
 /* ---- Reader chrome (README → Top bar, Bottom toolbar) ---- */
 /* The title bar and capsule fade together. ‹ 书架 stays, including over an open sheet (scrim z 6, sheet z 7). */
