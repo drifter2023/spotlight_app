@@ -45,6 +45,7 @@ test('A-01…A-05: swipe left opens the Agent drawer, a question is answered wit
   expect(box!.x).toBeLessThan(-200);
   expect(box!.x + box!.width).toBeGreaterThan(60); // a strip of page is left on the left edge
   expect(bodies).toHaveLength(0); // opening makes no request
+  await expect(panel.locator('.ag-meta')).toHaveText('新对话'); // no 「历史 0」 before the first conversation (review S12)
 
   // A-02/A-03: ask; the question carries the selected sentence and the reply is streamed, with its 出处.
   await panel.getByLabel('问题').fill('这段的语气');
@@ -66,6 +67,7 @@ test('A-01…A-05: swipe left opens the Agent drawer, a question is answered wit
   await ready(page);
   await swipe(page, 330, 40);
   await expect(panel.locator('.ag-answer')).toHaveText('很克制，没有形容情绪的词。');
+  await expect(panel.locator('.ag-meta')).toContainText('历史 1');
 });
 
 for (const vp of [{ name: 'phone', width: 402, height: 874 }, { name: 'iPad', width: 820, height: 1180 }, { name: 'iPad landscape', width: 1180, height: 820 }]) {
