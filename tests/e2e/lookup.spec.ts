@@ -20,6 +20,8 @@ test('R-04: tap to drawer ≤ 100 ms; lemma, IPA, POS and gloss shown', async ({
   await expect(page.locator('.wd-ph')).toHaveText(/^\/.+\/$/);
   await expect(page.locator('.wd-pos')).toHaveText(/^v/);
   await expect(page.locator('.wd-def')).not.toBeEmpty();
+  // The first sense leads in full weight; any others follow quieter on the same line (review S4).
+  await expect(page.locator('.wd-def b')).not.toBeEmpty();
   const ms = await page.evaluate(() => window.__spotlightTapMs!);
   expect(ms).toBeLessThanOrEqual(100);
   await expect(page.locator('.rd-hl')).toHaveText('turning');

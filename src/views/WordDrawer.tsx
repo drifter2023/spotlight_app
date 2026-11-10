@@ -92,6 +92,20 @@ interface WordProps {
   onUndo: () => void;
 }
 
+/**
+ * The definition line: the first sense, which is also the footnote, in full weight; the other senses
+ * follow on the same line, quieter (review S4).
+ */
+function Gloss({ text }: { text: string }) {
+  const [first = '', ...rest] = text.split('，');
+  return (
+    <p className="wd-def">
+      <b>{first}</b>
+      {rest.length > 0 && <span className="wd-def-rest">{'，' + rest.join('，')}</span>}
+    </p>
+  );
+}
+
 export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }: WordProps) {
   return (
     <DrawerFrame kind="word" state={state} closing={closing} x={x}>
@@ -104,7 +118,7 @@ export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }:
             {result.phonetic && <span className="wd-ph">{result.phonetic}</span>}
             {result.pos && <span className="wd-pos">{result.pos}</span>}
           </div>
-          <p className="wd-def">{result.gloss}</p>
+          <Gloss text={result.gloss} />
           <div className="wd-actions">
             <button
               type="button"
