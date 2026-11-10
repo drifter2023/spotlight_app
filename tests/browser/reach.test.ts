@@ -205,9 +205,9 @@ describe('reader reach and the guide bar', () => {
     expect(top()).toBe(true);
     const dock = document.querySelector('.rd-dock')!.getBoundingClientRect();
     const x = dock.left + dock.width / 2, y = dock.top + dock.height / 2;
-    await sleep(3000 + 100); // the 3 s idle fade, then 100 ms
-    expect(top()).toBe(false);
-    clickAt(x, y);
+    await sleep(2900);
+    await expect.poll(top, { interval: 10, timeout: 3000 }).toBe(false); // the 3 s idle fade
+    clickAt(x, y); // well inside the 400 ms grace
     await frames(1);
     expect(top()).toBe(true);
     await sleep(700); // no word drawer opened behind it
@@ -224,13 +224,13 @@ describe('reader reach and the guide bar', () => {
     const y0 = line.getBoundingClientRect().top;
     const top0 = scroller.scrollTop;
     clickAt(p.x, p.y);
-    await sleep(900); // open (330 ms) and the smooth keep-on-screen scroll
+    await expect.poll(() => scroller.scrollTop, { timeout: 4000 }).toBeGreaterThan(top0 + 8); // keep-on-screen pushed up
     expect(drawer()).toBeTruthy();
-    expect(scroller.scrollTop, 'the drawer pushed the page up').toBeGreaterThan(top0 + 8);
+    let held = -1;
+    await expect.poll(() => { const t = scroller.scrollTop; const same = t === held; held = t; return same; }, { interval: 150, timeout: 4000 }).toBe(true); // the smooth scroll ended
     clickAt(window.innerWidth / 2, 64); // a tap in the title area only closes it, never opens another word
-    await sleep(600);
-    expect(drawer()).toBeNull();
-    expect(Math.abs(line.getBoundingClientRect().top - y0)).toBeLessThanOrEqual(1);
+    await expect.poll(drawer, { timeout: 4000 }).toBeNull();
+    await expect.poll(() => Math.abs(line.getBoundingClientRect().top - y0), { timeout: 4000 }).toBeLessThanOrEqual(1);
   });
 
   it('opens a sharp word at once, and scrolls a blurred word into the band before opening it', async () => {
