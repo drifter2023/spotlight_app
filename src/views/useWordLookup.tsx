@@ -173,16 +173,18 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   };
 
   /**
-   * As a drawer that keep-on-screen pushed up closes, the page eases back by the same distance, so the
-   * band holds the sentence the reader was in again (review M2). Skipped if the page has moved since
-   * the push (the reader scrolled), and stopped by any scroll that is not ours.
+   * As a drawer that keep-on-screen pushed up closes, the page eases back to where it was, so the band
+   * holds the sentence the reader was in again (review M2). A scroll gesture closes the drawer and
+   * clears the push first, so this only runs after a tap; any scroll that is not ours stops it.
    */
   const settleBack = (host: HTMLElement) => {
     const push = pushed.current;
     pushed.current = null;
     const scroller = engine.current?.scroller;
-    if (!push || push.host !== host || !scroller || Math.abs(scroller.scrollTop - push.target) > 2) return;
+    if (!push || push.host !== host || !scroller) return;
+    scroller.scrollTop = scroller.scrollTop; // stops a keep-on-screen smooth scroll still under way
     const start = scroller.scrollTop;
+    if (Math.abs(start - push.from) < 1) return;
     const t0 = performance.now();
     let last = start;
     const step = () => {
