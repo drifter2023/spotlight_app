@@ -3,7 +3,7 @@ import { blurMaxFor, TYPE_SCALE } from '../prefs/prefs.ts';
 import { countWords, paragraphText, sentenceStarts } from '../ingest/text.ts';
 import { ease } from '../motion.ts';
 import type { Anchor, ChapterData, Paragraph } from '../types.ts';
-import { lineOffset, lineRange, renderLine, type Footnote } from './decorate.ts';
+import { lineOffset, lineRange, outsideWindow, renderLine, type Footnote } from './decorate.ts';
 import { bandFor, blurPx, opacityFor, tFor, withSentencePenalty } from './focus.ts';
 import type { GuideHost, SentenceId } from './guide.ts';
 import { ChapterLayout, type LineMeta } from './layout.ts';
@@ -134,6 +134,8 @@ export class ReaderEngine implements GuideHost {
   #lastScroll = 0;
   /** Paragraphs waiting for their footnotes to be redrawn, nearest to the band first. */
   #annQueue: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+  /** Paragraphs near the screen that wait for a new annotator until they leave the window (review M1). */
+  #deferred: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
   #annTimer = 0;
 
   constructor(scroller: HTMLElement, book: EngineBook, prefs: Prefs, cb: EngineCallbacks = {}) {
@@ -296,10 +298,15 @@ export class ReaderEngine implements GuideHost {
     this.#scroller.scrollTop = this.#top[i]! + this.#lh / 2 - centre;
   }
 
-  /** Sets the footnote source and re-decorates mounted chapters. */
-  setAnnotator(fn: Annotator | null): void {
+  /**
+   * Sets the footnote source and re-decorates mounted chapters. With `deferVisible`, paragraphs within
+   * one viewport of the screen keep their footnotes until a scroll pause finds them outside that window,
+   * so a re-prediction never makes glosses come and go on the lines being read (review M1).
+   */
+  setAnnotator(fn: Annotator | null, opts?: { deferVisible?: boolean }): void {
     this.#annotate = fn;
-    this.refreshAnnotations();
+    if (opts?.deferVisible) this.#queueDecorate([...this.#blocks.keys()], true, true);
+    else this.refreshAnnotations();
   }
 
   /**
@@ -307,6 +314,7 @@ export class ReaderEngine implements GuideHost {
    * nearest the band go first; the rest follow in background slices, so no frame is blocked (R-01).
    */
   refreshAnnotations(): void {
+    this.#deferred = [];
     this.#queueDecorate([...this.#blocks.keys()], true);
   }
 
@@ -750,6 +758,7 @@ export class ReaderEngine implements GuideHost {
     clearTimeout(this.#jobTimer);
     clearTimeout(this.#annTimer);
     this.#annQueue = [];
+    this.#deferred = [];
     this.#prepared.clear();
     this.#content.remove();
     this.#dropLayer.remove();
@@ -811,16 +820,20 @@ export class ReaderEngine implements GuideHost {
    * Queues every paragraph of `chapters` for decoration, nearest to the band centre first, and
    * runs the first slice now (what is on screen). `replace` drops what was queued before.
    */
-  #queueDecorate(chapters: number[], replace: boolean): void {
+  #queueDecorate(chapters: number[], replace: boolean, deferVisible = false): void {
     const centre = this.#lines.length ? this.#lineAt(this.#scroller.scrollTop + this.#H / 2) : 0;
     const items: { chapter: number; lines: LineMeta[]; i: number; j: number; d: number }[] = [];
+    if (deferVisible) this.#deferred = [];
     for (const chapter of chapters) {
       const lines = this.#blocks.get(chapter)?.lines;
       if (!lines) continue;
       for (let i = 0; i < lines.length;) {
         let j = i + 1;
         while (j < lines.length && lines[j]!.para === lines[i]!.para) j++;
-        if (lines[i]!.para >= 0) items.push({ chapter, lines, i, j, d: Math.abs((this.#index.get(lines[i]!.el) ?? 1e9) - centre) });
+        if (lines[i]!.para >= 0) {
+          if (deferVisible && !this.#offWindow(lines, i, j)) this.#deferred.push({ chapter, lines, i, j });
+          else items.push({ chapter, lines, i, j, d: Math.abs((this.#index.get(lines[i]!.el) ?? 1e9) - centre) });
+        }
         i = j;
       }
     }
@@ -853,6 +866,7 @@ export class ReaderEngine implements GuideHost {
   #onIdle = (): void => {
     if (this.#gapHost) return; // the drawer is open: keep the DOM still until it closes
     this.#syncWindow();
+    this.#flushDeferred();
     this.#cb.onAnchor?.(this.currentAnchor());
   };
 
@@ -871,6 +885,29 @@ export class ReaderEngine implements GuideHost {
     }
     for (const idx of this.#prepared.keys()) if (!want.includes(idx)) this.#prepared.delete(idx);
     this.#scheduleLayout(c);
+  }
+
+  /** Lines `[i, j)` of a mounted chapter lie entirely outside `[scrollTop − H, scrollTop + 2H]`. */
+  #offWindow(lines: LineMeta[], i: number, j: number): boolean {
+    const a = this.#index.get(lines[i]!.el);
+    const b = this.#index.get(lines[j - 1]!.el);
+    if (a === undefined || b === undefined) return true;
+    return outsideWindow(this.#top[a]!, this.#top[b]! + this.#lh, this.#scroller.scrollTop, this.#H);
+  }
+
+  /** At a scroll pause, deferred paragraphs that have left the window take the current annotator. */
+  #flushDeferred(): void {
+    if (!this.#deferred.length) return;
+    const ready: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+    const wait: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+    for (const q of this.#deferred) {
+      if (this.#blocks.get(q.chapter)?.lines !== q.lines) continue; // relaid: already decorated afresh
+      (this.#offWindow(q.lines, q.i, q.j) ? ready : wait).push(q);
+    }
+    this.#deferred = wait;
+    if (!ready.length) return;
+    this.#annQueue.push(...ready);
+    if (!this.#annTimer) this.#annTimer = window.setTimeout(this.#decorateSlice, 0);
   }
 
   #wanted(c: number): number[] {

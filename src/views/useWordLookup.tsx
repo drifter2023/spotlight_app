@@ -94,9 +94,13 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     for (const l of seenRef.current) if (!savedRef.current.has(l)) out.add(l);
     return out;
   };
-  const applyFootnotes = () => {
+  /**
+   * `later`: a re-prediction after a lookup or 撤回. Lines on and near the screen keep their footnotes
+   * until a scroll takes them out of view, so glosses never come and go under the reader (review M1).
+   */
+  const applyFootnotes = (later = false) => {
     const dict = dictRef.current;
-    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current));
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current), { deferVisible: later });
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {
@@ -179,7 +183,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     if (!seenRef.current.has(r.lemma)) {
       seenRef.current.add(r.lemma);
       const model = modelRef.current;
-      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; refreshFootnotes(); });
+      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) applyFootnotes(true); refreshFootnotes(); });
     }
     void logMetric(db, { type: 'lookup', bookId, predicted });
     recording.current = (async () => {
@@ -472,13 +476,15 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     if (seenRef.current.delete(lemma)) seenDirty.current = true;
     if (savedRef.current.delete(lemma)) seenDirty.current = true;
     if (predictedRef.current.delete(lemma)) seenDirty.current = true;
+    // The word's own footnote goes at once; re-predicting the others waits for the scroll (review M1).
+    refreshFootnotes();
     void logMetric(db, { type: 'undo', bookId, predicted: p.predicted });
     close();
     const model = modelRef.current;
     void recording.current.then(async () => {
       await forgetLemma(db, bookId, lemma);
       await model?.undone(lemma);
-      if (repredict()) { seenDirty.current = true; refreshFootnotes(); }
+      if (repredict()) applyFootnotes(true);
     });
   };
 
