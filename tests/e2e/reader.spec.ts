@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { fullTier, openFromHome, ready, tapTitle, wordInBand } from './helpers.ts';
 
 test('makes no network requests outside the app origin, through home, reading and lookup', async ({ page, baseURL }) => {
+  test.slow(!!process.env.CI, 'runs the first-launch probe, which is slow on a CI runner');
   const origin = new URL(baseURL!).origin;
   const foreign: string[] = [];
   page.on('request', (r) => {
@@ -51,7 +52,11 @@ test('opens The Great Gatsby with the chapter eyebrow and 1%', async ({ page }) 
   await ready(page);
   await expect(page.locator('.rd-eyebrow-chapter')).toHaveText('Chapter I');
   await expect(page.locator('.rd-eyebrow-pct')).toHaveText('1%');
-  await expect(page.locator('.rd-line[data-p="0"]').first()).toContainText('In my younger and more vulnerable years');
+  // Where the first line breaks depends on the platform's font rendering (Linux WebKit wraps "years"),
+  // so check the opening words and the paragraph, not the break.
+  await expect(page.locator('.rd-line[data-p="0"]').first()).toContainText('In my younger and more vulnerable');
+  const para0 = await page.locator('.rd-chapter[data-ch="0"] .rd-line[data-p="0"]').allTextContents();
+  expect(para0.join(' ').replace(/\s+/g, ' ')).toContain('In my younger and more vulnerable years my father gave me some advice');
 });
 
 test('R-07: a reload restores the same paragraph into the band', async ({ page }) => {
@@ -149,8 +154,9 @@ test('S-03: 聚焦模糊 off makes the whole page sharp, any word below the titl
   await expect(page.getByTestId('drawer')).toHaveAttribute('data-state', 'ready');
   await page.mouse.click(12, vp.height / 2);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
-  // The title area itself shows ‹ 书架 / 目录 / Aa, never a drawer.
-  await page.mouse.click(high.x, 64);
+  // The title area itself shows ‹ 书架 / 目录 / Aa, never a drawer. Tap its middle: at the left, the
+  // dev panel (&dev=1) reaches below y 64 on Linux WebKit, whose native select is taller.
+  await tapTitle(page);
   await expect(page.locator('.rd-top')).toHaveClass(/rd-chrome-on/);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
   await page.getByRole('button', { name: '阅读设置' }).click();
