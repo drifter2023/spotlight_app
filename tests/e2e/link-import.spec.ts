@@ -33,7 +33,7 @@ test('L-03/L-04: a pasted link imports through /api/fetch, opens, dedupes, and r
   const bodies: string[] = [];
   await page.route('**/api/fetch', async (route) => {
     bodies.push(route.request().postData() ?? '');
-    await page.waitForTimeout(150); // long enough to see 正在抓取网页
+    await page.waitForTimeout(1000); // long enough to see 正在抓取网页, even on a slow CI runner
     await route.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Final-Url': 'https://coastal.example/harbour' }, body: ARTICLE });
   });
   await page.goto('/');
