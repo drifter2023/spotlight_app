@@ -156,6 +156,7 @@ test('Z-07: Home runs yesterday\'s 札记 only when 自动整理 is on; a fresh 
   await line(page).click();
   await expect(line(page)).toContainText('昨天 · The Great Gatsby');
   expect(fake.notes).toBe(1);
+  await page.waitForTimeout(600); // user.db persists 自动整理 and the entry after a 300 ms debounce
 
   // A new question "yesterday" (a late sitting), then Home the next day: one automatic request.
   await page.clock.setFixedTime(new Date(yesterday.getTime() + 3_600_000));
