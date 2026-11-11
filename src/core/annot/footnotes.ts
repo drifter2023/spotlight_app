@@ -5,8 +5,21 @@ import type { Annotator } from '../reader/engine.ts';
 import { wordContext, words } from '../reader/words.ts';
 
 /**
+ * Lemmas this frequent (BNC / frq rank, ECDICT) are the reader's everyday words: I, you, be, to, so,
+ * time, house… A tap on one still opens its drawer, but adds no footnote (owner decision 2026-11-11).
+ */
+export const COMMON_RANK = 200;
+
+/** True for one of the ~200 most frequent lemmas: looking it up does not footnote it. */
+export function isCommonLemma(dict: DictService, lemma: string): boolean {
+  const level = dict.level(lemma);
+  return !!level && level.rank > 0 && level.rank <= COMMON_RANK;
+}
+
+/**
  * Every word whose lemma is in `saved` or `predicted` gets its first sense as a footnote.
- * `saved` is lemmas the reader pressed 保存 for; a lookup alone does not qualify. A lemma only
+ * `saved` is the reader's own footnotes: lemmas they looked up (except common ones) or pressed 保存 for
+ * (owner decision 2026-11-11; a footnote used to wait for 保存). A lemma only
  * in `predicted` is `kind: 'predicted'` so the gloss can recede; one that is saved (even if it
  * is also predicted) stays the ordinary footnote. A Set of those lemmas' surface forms filters
  * words cheaply; only candidates go through the full lookup.

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { isCommonLemma } from '../../src/core/annot/footnotes.ts';
 import { DictService } from '../../src/core/dict/service.ts';
 import { nodeDictSource } from '../helpers/nodeDict.ts';
 
@@ -17,6 +18,18 @@ describe.skipIf(!existsSync(PATH))('dict.db (built)', () => {
     expect(n).toBeLessThan(80000);
     const keys = (db.prepare('SELECT key FROM meta').all() as { key: string }[]).map((r) => r.key);
     expect(keys).toEqual(expect.arrayContaining(['license.ecdict', 'license.ipa-dict', 'license.wordnet']));
+  });
+
+  it('common words (owner decision 2026-11-11): a lookup of I, you, is, was, to, so adds no footnote; advice does', () => {
+    for (const w of ['I', 'you', 'is', 'was', 'were', 'to', 'so', 'the', 'and', 'because', 'time']) {
+      const r = d.lookup(w);
+      expect(r, w).toBeTruthy();
+      expect(isCommonLemma(d, r!.lemma), `${w} → ${r!.lemma}`).toBe(true);
+    }
+    for (const w of ['advice', 'vulnerable', 'criticize', 'mind', 'council']) {
+      const r = d.lookup(w);
+      expect(isCommonLemma(d, r!.lemma), w).toBe(false);
+    }
   });
 
   it.each([

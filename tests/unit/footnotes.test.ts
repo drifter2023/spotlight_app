@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { footnoteAnnotator } from '../../src/core/annot/footnotes.ts';
+import { COMMON_RANK, footnoteAnnotator, isCommonLemma } from '../../src/core/annot/footnotes.ts';
 import { DictService } from '../../src/core/dict/service.ts';
 import { paragraphText } from '../../src/core/ingest/text.ts';
 import { fixtureDict } from '../helpers/nodeDict.ts';
@@ -32,5 +32,17 @@ describe('footnoteAnnotator', () => {
   it('defaults the predicted set to empty, so a lookup is still a plain footnote', () => {
     const list = notes(['run']);
     expect(list).toEqual([{ start: text.indexOf('ran'), end: text.indexOf('ran') + 3, text: '跑' }]);
+  });
+});
+
+describe('isCommonLemma (owner decision 2026-11-11)', () => {
+  const at = (rank: number) => ({ level: () => ({ rank, tier: 0, collins: 0, oxford: 0 }) }) as unknown as DictService;
+  it('counts the 200 most frequent lemmas as common, and nothing off the lists', () => {
+    expect(COMMON_RANK).toBe(200);
+    expect(isCommonLemma(at(1), 'the')).toBe(true);
+    expect(isCommonLemma(at(200), 'x')).toBe(true);
+    expect(isCommonLemma(at(201), 'x')).toBe(false);
+    expect(isCommonLemma(at(0), 'x')).toBe(false); // on no frequency list: rare, not common
+    expect(isCommonLemma({ level: () => undefined } as unknown as DictService, 'x')).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { createPortal } from 'react-dom';
 import { lightHaptic } from '../app/haptics.ts';
 import { loadDict } from '../app/dict.ts';
-import { footnoteAnnotator } from '../core/annot/footnotes.ts';
+import { footnoteAnnotator, isCommonLemma } from '../core/annot/footnotes.ts';
 import { forgetLemma, isSaved, recordLookup, savedLemmas, seenLemmas, setSaved } from '../core/annot/lookups.ts';
 import type { Db } from '../core/db/types.ts';
 import type { DictService, LookupResult } from '../core/dict/service.ts';
@@ -89,8 +89,18 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   /** Saved lemmas and predicted words (P-03). A lookup alone is not a footnote; 保存 adds the lemma. Predictions do not require 保存. */
-  const footnoted = (): Set<string> => new Set([...savedRef.current, ...predictedRef.current]);
-  /** Unsaved lookups in this book. They are not force-footnoted; a difficulty prediction still shows, and 保存 adds the rest. */
+  const footnoted = (): Set<string> => new Set([...noted(), ...predictedRef.current]);
+  /**
+   * The reader's own footnotes: every lemma they looked up, except the ~200 most common words (a tap on
+   * "is" or "so" is usually a slip), plus anything they pressed 保存 for (owner decision 2026-11-11).
+   */
+  const noted = (): Set<string> => {
+    const out = new Set(savedRef.current);
+    const dict = dictRef.current;
+    if (dict) for (const l of seenRef.current) if (!isCommonLemma(dict, l)) out.add(l);
+    return out;
+  };
+  /** Unsaved lookups in this book, for the predictor (they count as unknown words). */
   const unsavedLookups = (): Set<string> => {
     const out = new Set<string>();
     for (const l of seenRef.current) if (!savedRef.current.has(l)) out.add(l);
@@ -102,7 +112,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
    */
   const applyFootnotes = (later = false) => {
     const dict = dictRef.current;
-    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current), { deferVisible: later });
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, noted(), predictedRef.current), { deferVisible: later });
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {
@@ -206,7 +216,10 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return { state: 'ready', result: r, predicted: predictedRef.current.has(r.lemma) && !seenRef.current.has(r.lemma) };
   };
 
-  /** A lookup writes a row, trains the model and logs the metric. The footnote waits for 保存. */
+  /**
+   * A lookup writes a row, trains the model and logs the metric. Unless the word is one of the most
+   * common, its footnote appears at once, everywhere in the book, as the drawer finishes opening.
+   */
   const record = (p: Pop) => {
     const r = p.result;
     if (!r || p.target.kind !== 'word') return;
@@ -214,6 +227,11 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const predicted = p.predicted;
     if (!seenRef.current.has(r.lemma)) {
       seenRef.current.add(r.lemma);
+      const dict = dictRef.current;
+      if (dict && !isCommonLemma(dict, r.lemma)) {
+        seenDirty.current = true;
+        later(refreshFootnotes, MOTION.drawerOpen); // also if the open already finished (a slow dictionary)
+      }
       const model = modelRef.current;
       if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) applyFootnotes(true); refreshFootnotes(); });
     }
@@ -236,7 +254,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     })();
   };
 
-  /** A newly saved lemma gets its footnote everywhere, including under the open word. */
+  /** A newly looked-up or saved lemma gets its footnote everywhere, including under the open word. */
   const refreshFootnotes = () => {
     if (!seenDirty.current || !dictRef.current) return;
     seenDirty.current = false;
