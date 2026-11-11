@@ -5,7 +5,7 @@ import { flatten, pageAround, readingContext } from '../../src/core/agent/contex
 import { formatWhen } from '../../src/core/agent/format.ts';
 import { SYSTEM_PROMPT, splitAnswer, userMessage } from '../../src/core/agent/prompt.ts';
 import { AgentService, type AskState } from '../../src/core/agent/service.ts';
-import { createSession, listSessions, loadMessages, saveExchange } from '../../src/core/agent/store.ts';
+import { createSession, deleteSession, listAllSessions, listSessions, loadMessages, saveExchange } from '../../src/core/agent/store.ts';
 import { migrate } from '../../src/core/db/migrations.ts';
 import type { Db } from '../../src/core/db/types.ts';
 import { deleteBook, saveParsedBook } from '../../src/core/library/library.ts';
@@ -52,6 +52,46 @@ describe('agent store (A-02)', () => {
     await deleteBook(db, 'a');
     expect(await db.all('SELECT 1 FROM agent_session')).toEqual([]);
     expect(await db.all('SELECT 1 FROM agent_message')).toEqual([]);
+  });
+});
+
+describe('agent store for 札记 (Z-11, Z-12)', () => {
+  it('Z-12: stores each question with its place in the book; old rows have none', async () => {
+    await saveExchange(db, 's1', { question: 'q1', quote: 'Three three.', answer: 'a1', loc: { chapter: 0, para: 1, sentence: 0 } }, 5);
+    await saveExchange(db, 's1', { question: 'q2', answer: 'a2' }, 6);
+    expect(await db.all("SELECT text, loc FROM agent_message WHERE role = 'user' ORDER BY id")).toEqual([
+      { text: 'q1', loc: '{"chapter":0,"para":1,"sentence":0}' }, { text: 'q2', loc: null },
+    ]);
+  });
+
+  it('Z-11: lists every book\'s conversations with an exchange, newest first, with title and first quote', async () => {
+    await saveParsedBook(db, { ...book, id: 'b', title: 'B Book' }, 'epub', 2);
+    await createSession(db, { ...session, id: 's2', bookId: 'b', updatedAt: 2 });
+    await createSession(db, { ...session, id: 'empty', updatedAt: 99 }); // first answer failed: nothing to list
+    await saveExchange(db, 's1', { question: '这里的指代是谁', quote: 'Three three.', answer: 'a' }, 5);
+    await saveExchange(db, 's1', { question: '再问', quote: 'Four four.', answer: 'b' }, 6);
+    await saveExchange(db, 's2', { question: '这段的语气', quote: 'One one.', answer: 'c' }, 9);
+    const all = await listAllSessions(db);
+    expect(all.map((s) => [s.id, s.bookTitle, s.title, s.quote])).toEqual([
+      ['s2', 'B Book', '这段的语气', 'One one.'],
+      ['s1', 'A Book', '这里的指代是谁', 'Three three.'],
+    ]);
+  });
+
+  it('Z-01 Z-11: deleting a conversation removes its messages and nothing else', async () => {
+    await createSession(db, { ...session, id: 's2' });
+    await saveExchange(db, 's1', { question: 'q', answer: 'a' });
+    await saveExchange(db, 's2', { question: 'q', answer: 'a' });
+    await deleteSession(db, 's1');
+    expect((await listSessions(db, 'a')).map((s) => s.id)).toEqual(['s2']);
+    expect(await loadMessages(db, 's1')).toEqual([]);
+    expect(await loadMessages(db, 's2')).toHaveLength(2);
+  });
+
+  it('Z-12: AgentService stores the loc it was given', async () => {
+    await setKey(db, 'sk-test');
+    await new AgentService(db, { fetch: async () => new Response(sse(['好'])) }).ask({ ...input, loc: { chapter: 0, para: 1, sentence: 0 } }, () => {});
+    expect(await db.all("SELECT loc FROM agent_message WHERE role = 'user'")).toEqual([{ loc: '{"chapter":0,"para":1,"sentence":0}' }]);
   });
 });
 

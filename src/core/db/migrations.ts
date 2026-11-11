@@ -43,6 +43,20 @@ export const MIGRATIONS: readonly string[] = [
      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE,
      role TEXT NOT NULL, text TEXT NOT NULL, quote TEXT, cite TEXT, at INTEGER NOT NULL);
    CREATE INDEX agent_message_session ON agent_message (session_id, id);`,
+  // v8 (M13): 札记. Where each question was asked; one entry per book per reading day; its notes.
+  `ALTER TABLE agent_message ADD COLUMN loc TEXT;
+   CREATE TABLE note_entry (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, book_id TEXT NOT NULL REFERENCES book(id) ON DELETE CASCADE,
+     day TEXT NOT NULL, status TEXT NOT NULL, last_msg_id INTEGER NOT NULL, prompt_version INTEGER NOT NULL,
+     created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, read_at INTEGER,
+     UNIQUE (book_id, day));
+   CREATE INDEX note_entry_day ON note_entry (day DESC, id DESC);
+   CREATE TABLE note_item (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id INTEGER NOT NULL REFERENCES note_entry(id) ON DELETE CASCADE,
+     session_id TEXT NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE, message_id INTEGER NOT NULL,
+     ord INTEGER NOT NULL, kind TEXT NOT NULL, point TEXT NOT NULL, detail TEXT NOT NULL, quote TEXT NOT NULL,
+     chapter INTEGER NOT NULL, para INTEGER NOT NULL, sentence INTEGER NOT NULL, chapter_label TEXT NOT NULL);
+   CREATE INDEX note_item_entry ON note_item (entry_id, ord);`,
 ];
 
 export async function migrate(db: Db, migrations: readonly string[] = MIGRATIONS): Promise<number> {

@@ -1,5 +1,5 @@
 import type { Db } from '../db/types.ts';
-import type { AgentMessage, AgentSession } from './types.ts';
+import type { AgentLoc, AgentMessage, AgentSession, SessionListItem } from './types.ts';
 
 interface SessionRow {
   id: string; book_id: string; chapter: number; chapter_label: string; title: string;
@@ -36,14 +36,38 @@ const TITLE_CHARS = 24;
 
 /** A question and its complete answer, stored together (nothing is stored for a failed answer). */
 export async function saveExchange(
-  db: Db, sessionId: string, ex: { question: string; quote?: string; answer: string; cite?: string }, at = Date.now(),
+  db: Db, sessionId: string, ex: { question: string; quote?: string; answer: string; cite?: string; loc?: AgentLoc }, at = Date.now(),
 ): Promise<void> {
   await db.tx(async () => {
-    await db.run('INSERT INTO agent_message (session_id, role, text, quote, cite, at) VALUES (?, ?, ?, ?, ?, ?)',
-      [sessionId, 'user', ex.question, ex.quote ?? null, null, at]);
+    await db.run('INSERT INTO agent_message (session_id, role, text, quote, cite, at, loc) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [sessionId, 'user', ex.question, ex.quote ?? null, null, at, ex.loc ? JSON.stringify(ex.loc) : null]);
     await db.run('INSERT INTO agent_message (session_id, role, text, quote, cite, at) VALUES (?, ?, ?, ?, ?, ?)',
       [sessionId, 'agent', ex.answer, null, ex.cite ?? null, at]);
     const title = Array.from(ex.question.trim()).slice(0, TITLE_CHARS).join('');
     await db.run("UPDATE agent_session SET title = CASE WHEN title = '' THEN ? ELSE title END, updated_at = ? WHERE id = ?", [title, at, sessionId]);
   });
+}
+
+/**
+ * Every book's conversations that hold at least one stored exchange, newest first, with the book's
+ * title and the first question's quote (Z-11). A session whose first answer failed has nothing to show.
+ */
+export async function listAllSessions(db: Db): Promise<SessionListItem[]> {
+  const rows = await db.all<SessionRow & { book_title: string; quote: string | null }>(
+    `SELECT s.id, s.book_id, s.chapter, s.chapter_label, s.title, s.anchor_para, s.anchor_sentence, s.updated_at,
+            b.title AS book_title,
+            (SELECT m.quote FROM agent_message m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.id LIMIT 1) AS quote
+       FROM agent_session s JOIN book b ON b.id = s.book_id
+      WHERE EXISTS (SELECT 1 FROM agent_message m WHERE m.session_id = s.id)
+      ORDER BY s.updated_at DESC, s.rowid DESC`);
+  return rows.map((r) => ({
+    id: r.id, bookId: r.book_id, chapter: r.chapter, chapterLabel: r.chapter_label, title: r.title,
+    anchorPara: r.anchor_para, anchorSentence: r.anchor_sentence, updatedAt: r.updated_at,
+    bookTitle: r.book_title, quote: r.quote ?? '',
+  }));
+}
+
+/** Deletes a conversation, its messages and the 札记 notes made from it (cascade; D9). */
+export async function deleteSession(db: Db, id: string): Promise<void> {
+  await db.run('DELETE FROM agent_session WHERE id = ?', [id]);
 }

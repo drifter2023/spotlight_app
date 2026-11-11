@@ -22,6 +22,8 @@ interface Props {
   /** Text selected on the page and sent here by 问旁注 (C3); asked about instead of the picked sentence. */
   attachment: { text: string; chapter: number } | null;
   onAttachment: (a: { text: string; chapter: number } | null) => void;
+  /** A conversation to show on the first open instead of the newest one (from Home's 对话 list, Z-11). */
+  initialSid?: string | undefined;
 }
 
 interface Live { sid: string; question: string; quote: string; state: AskState }
@@ -30,7 +32,7 @@ const EMPTY_PAGE: Page = { chapter: 0, chapterTitle: '', paras: [] };
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 /** The Agent drawer (AGENT_DRAWER.md, design 9a): a per-book chat with the reading companion 旁注. */
-export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAttachment }: Props) {
+export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAttachment, initialSid }: Props) {
   const service = useMemo(() => new AgentService(db), [db]);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [sid, setSid] = useState<string | null | undefined>(undefined); // undefined: not chosen yet
@@ -71,7 +73,9 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
     setPage(p);
     setSel(defaultIndex(p, a));
     setHist(false);
-    void refreshSessions().then((list) => { if (alive.current) setSid((cur) => (cur === undefined ? list[0]?.id ?? null : cur)); });
+    void refreshSessions().then((list) => { if (alive.current) setSid((cur) => (cur === undefined ? (list.find((s) => s.id === initialSid) ?? list[0])?.id ?? null : cur)); });
+    // `initialSid` is read on the first open only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, book, engine, refreshSessions]);
 
   useEffect(() => {
@@ -165,12 +169,18 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
     const quote = attachment?.text ?? (id === sid ? convQuote : undefined) ?? sentence.text;
     // Text from the page (问旁注) unless it is one of the picker's sentences.
     const selected = attachment !== null || !flat.some((x) => x.text === quote);
+    // Where the question was asked (Z-12): the sentence it is about, else the reader's place for page text.
+    const picked = attachment ? undefined : flat.find((x) => x.text === quote);
+    const anchor = engine.current?.currentAnchor();
+    const loc = picked ? { chapter: page.chapter, para: picked.para, sentence: picked.sentence }
+      : anchor ? { chapter: anchor.chapter, para: anchor.para, sentence: anchor.sentence }
+      : { chapter: page.chapter, para: sentence.para, sentence: sentence.sentence };
     if (attachment) onAttachment(null); // sent with this question; follow-ups are about it too
     setAskedIn(sessionId);
     setLive({ sid: sessionId, question, quote, state: { status: 'waiting' } });
     const final = await service.ask({
       sessionId, question, sentence: quote, selected, title: book.title, chapter: page.chapterTitle,
-      reading: readingContext(book.chapters, page),
+      reading: readingContext(book.chapters, page), loc,
     }, (state) => { if (alive.current) setLive((cur) => (cur && cur.sid === sessionId && cur.question === question ? { ...cur, state } : cur)); });
     if (!alive.current) return;
     if (final.status === 'done') {
@@ -179,7 +189,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
       setMsgs(await loadMessages(db, sessionId));
       setLive((cur) => (cur && cur.sid === sessionId && cur.question === question ? null : cur));
     }
-  }, [flat, sel, shown, sid, db, book, page, service, refreshSessions, attachment, onAttachment, convQuote]);
+  }, [flat, sel, shown, sid, db, book, page, service, refreshSessions, attachment, onAttachment, convQuote, engine]);
 
   const used = new Set(msgs.filter((m) => m.role === 'user').map((m) => m.text));
   const onSelection = attachment !== null || (convQuote !== undefined && !flat.some((x) => x.text === convQuote));

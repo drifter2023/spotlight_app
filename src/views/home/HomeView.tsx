@@ -13,7 +13,11 @@ import { ImportChooser } from './ImportChooser.tsx';
 import { ShelfRow } from './ShelfRow.tsx';
 import { VocabCard } from './VocabCard.tsx';
 
-export interface OpenRequest { book: ShelfBook; from: HTMLElement }
+export interface OpenRequest {
+  book: ShelfBook; from: HTMLElement;
+  /** Open the Agent drawer on this conversation (札记 → 对话, Z-11). */
+  agentSession?: string;
+}
 
 type ImportState = { name: string; progress: ImportProgress | null; stage?: LinkStage; error: string | null } | null;
 
