@@ -23,7 +23,8 @@ import { drawerInner, useWordLookup } from './useWordLookup.tsx';
 export interface ReaderBook extends EngineBook { title: string }
 interface Props { session: Session; book: ReaderBook; initialAnchor: Anchor | null; onBack: () => void }
 
-const CHROME_IDLE_MS = 3000;
+/** Idle time before the top bar and capsule fade (owner decision 2026-11-11, review O3; README said 3 s). */
+const CHROME_IDLE_MS = 5000;
 /** A tap on the capsule's place this soon after it faded still counts as a tap on the capsule. */
 const DOCK_GRACE_MS = 400;
 
@@ -148,7 +149,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   }, [session, book, initialAnchor]);
 
   // Chrome: shown by a tap in the title area, on blank space or the page edge; hidden by the same tap again,
-  // a tap on text, after 3 s idle or when scrolling starts.
+  // a tap on text, after 5 s idle or when scrolling starts.
   const showChrome = (on: boolean) => {
     clearTimeout(chromeTimer.current);
     setChrome(on);

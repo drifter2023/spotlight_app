@@ -169,8 +169,8 @@ describe('reader reach and the chrome', () => {
     expect(top()).toBe(true);
     const dock = document.querySelector('.rd-dock')!.getBoundingClientRect();
     const x = dock.left + dock.width / 2, y = dock.top + dock.height / 2;
-    await sleep(2900);
-    await expect.poll(top, { interval: 10, timeout: 3000 }).toBe(false); // the 3 s idle fade
+    await sleep(4900);
+    await expect.poll(top, { interval: 10, timeout: 3000 }).toBe(false); // the 5 s idle fade
     clickAt(x, y); // well inside the 400 ms grace
     await frames(1);
     expect(top()).toBe(true);
