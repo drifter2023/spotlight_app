@@ -63,7 +63,7 @@ const drawer = () => document.querySelector('[data-testid="drawer"]');
 describe('scroll a soft line to the centre', () => {
   it('puts the line in the band without reading layout per frame', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: true });
     engine = e;
     await e.mount(null);
     el.scrollTop = 80;
@@ -105,7 +105,7 @@ describe('scroll a soft line to the centre', () => {
 
   it('a cancelled scroll does not finish', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: true });
     engine = e;
     await e.mount(null);
     await frames(2);
@@ -140,6 +140,19 @@ describe('reader reach and the chrome', () => {
     await waitFor('.rd-line[data-p]');
     await frames(2);
   }
+
+  it('shows the one-line first-run hint once, never again (review O2)', async () => {
+    expect(prefs.get().hinted).toBe(false);
+    await mount();
+    await expect.poll(() => document.querySelector('.rd-hint')?.textContent, { timeout: 3000 }).toContain('点清晰的词查义');
+    expect(prefs.get().hinted).toBe(true);
+    root?.unmount();
+    root = null;
+    document.body.innerHTML = '';
+    await mount();
+    await sleep(500);
+    expect(document.querySelector('.rd-hint')).toBeNull();
+  });
 
   it('a tap in the title area shows and hides the chrome, and never opens a word or scrolls', async () => {
     await mount();

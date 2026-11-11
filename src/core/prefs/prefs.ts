@@ -13,10 +13,12 @@ export interface Prefs {
   focusBlur: boolean;
   /** True once the reader has moved 模糊强度 themselves; until then 夜读 uses its own default (N3). */
   blurMaxSet: boolean;
+  /** True once the one-line first-run hint has been shown; it never shows again (review O2). */
+  hinted: boolean;
 }
 export type PrefsListener = (prefs: Prefs, changed: keyof Prefs) => void;
 
-export const DEFAULT_PREFS: Prefs = { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: null, theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false };
+export const DEFAULT_PREFS: Prefs = { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: null, theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: false };
 
 /** 夜读's 模糊强度 when the reader has not set one (NIGHT_MODE_1c.md → N3). */
 export const NIGHT_BLUR_MAX = 9;
@@ -45,6 +47,7 @@ export function sanitise(p: Prefs): Prefs {
     predict: p.predict === 'off' || p.predict === 'many' ? p.predict : 'few',
     focusBlur: p.focusBlur !== false,
     blurMaxSet: p.blurMaxSet === true,
+    hinted: p.hinted === true,
   };
 }
 

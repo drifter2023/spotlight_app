@@ -3,6 +3,7 @@ import type { Session } from '../app/boot.ts';
 import { devTools, exposeDevHandle } from '../app/devtools.ts';
 import { shareTextFile } from '../app/share.ts';
 import { exportMetrics, logMetric } from '../core/metrics/metrics.ts';
+import { MOTION } from '../core/motion.ts';
 import { ReaderEngine, type EngineBook } from '../core/reader/engine.ts';
 import { PositionSaver, savePosition } from '../core/reader/position.ts';
 import { decideTier, runProbe } from '../core/reader/probe.ts';
@@ -32,6 +33,8 @@ function within(r: DOMRect, x: number, y: number, pad: number): boolean {
   return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 }
 const MIN_SESSION_MS = 5000;
+/** The first-run hint stays this long, then fades (review O2). */
+const HINT_MS = 6000;
 
 export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -43,6 +46,8 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const saverRef = useRef<PositionSaver | null>(null);
   const [prefs, setPrefs] = useState(session.prefs.get());
   const [probing, setProbing] = useState(false);
+  /** The one-line first-run hint under the eyebrow: shown once, for the first book (review O2). */
+  const [hint, setHint] = useState<'off' | 'on' | 'fading'>('off');
   const [chrome, setChrome] = useState(false);
   const [sheet, setSheet] = useState<'settings' | 'toc' | null>(null);
   const [chapter, setChapter] = useState(initialAnchor?.chapter ?? 0);
@@ -125,19 +130,34 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     window.addEventListener('pagehide', onPageHide);
 
     let cancelled = false;
+    const hintTimers: number[] = [];
+    /** Once per install: the hint shows after the page is ready and is marked shown at once. */
+    const firstHint = () => {
+      if (cancelled || session.prefs.get().hinted) return;
+      void session.prefs.set('hinted', true);
+      setHint('on');
+      hintTimers.push(window.setTimeout(() => setHint('fading'), HINT_MS));
+      hintTimers.push(window.setTimeout(() => setHint('off'), HINT_MS + MOTION.chrome));
+    };
     void engine.mount(initialAnchor).then(async () => {
-      if (cancelled || session.prefs.get().tier !== null) return;
-      const forced = (window as { __forceTier?: 'full' | 'fallback' }).__forceTier; // e2e only
-      if (forced) { await session.prefs.set('tier', forced); return; }
-      setProbing(true);
-      const result = await runProbe(engine);
       if (cancelled) return;
-      await session.prefs.set('tier', decideTier(result));
-      setProbing(false);
+      if (session.prefs.get().tier === null) {
+        const forced = (window as { __forceTier?: 'full' | 'fallback' }).__forceTier; // e2e only
+        if (forced) await session.prefs.set('tier', forced);
+        else {
+          setProbing(true);
+          const result = await runProbe(engine);
+          if (cancelled) return;
+          await session.prefs.set('tier', decideTier(result));
+          setProbing(false);
+        }
+      }
+      firstHint();
     });
 
     return () => {
       cancelled = true;
+      hintTimers.forEach(clearTimeout);
       unsubscribe();
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
@@ -263,6 +283,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
         onPick={(idx) => { setSheet(null); engineRef.current?.scrollToChapter(idx); }}
       />
       {probing && <p className="rd-probing">正在适配这台设备…</p>}
+      {hint !== 'off' && <p className="rd-hint" data-on={hint === 'on'}>点清晰的词查义 · 句末的小滴看语法 · 向左滑问旁注</p>}
       {devTools && <FpsMeter engine={engineRef} />}
       {devTools && <DevPanel prefs={session.prefs} />}
       </div>
