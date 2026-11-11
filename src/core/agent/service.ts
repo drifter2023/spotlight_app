@@ -3,6 +3,7 @@ import { getKey } from '../ai/key.ts';
 import type { Db } from '../db/types.ts';
 import { SYSTEM_PROMPT, splitAnswer, userMessage } from './prompt.ts';
 import { loadMessages, saveExchange } from './store.ts';
+import type { AgentLoc } from './types.ts';
 
 /**
  * What the Agent drawer shows for the question being answered.
@@ -23,6 +24,8 @@ export interface AskInput {
   title: string; chapter: string;
   /** The chapter text up to the end of the page (the "read so far"). */
   reading: string;
+  /** Where the question was asked; stored with it for 札记 (Z-12). */
+  loc?: AgentLoc;
 }
 
 const MAX_TOKENS = 600;
@@ -80,7 +83,7 @@ export class AgentService {
         }, this.#fetch);
         const { text, cite } = splitAnswer(acc);
         if (!text) return emit({ status: 'error', reason: 'bad-answer', partial: '' });
-        await saveExchange(this.#db, input.sessionId, { question: input.question, quote: input.sentence, answer: text, ...(cite ? { cite } : {}) });
+        await saveExchange(this.#db, input.sessionId, { question: input.question, quote: input.sentence, answer: text, ...(cite ? { cite } : {}), ...(input.loc ? { loc: input.loc } : {}) });
         return emit({ status: 'done', text, ...(cite ? { cite } : {}) });
       } finally {
         clearTimeout(timer);

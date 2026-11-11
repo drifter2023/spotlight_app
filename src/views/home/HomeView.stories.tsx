@@ -2,9 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect } from 'react';
 import { fn } from 'storybook/test';
 import type { Session } from '../../app/boot.ts';
+import { NotesService } from '../../core/notes/service.ts';
 import { PrefsStore } from '../../core/prefs/prefs.ts';
 import { setCalibrationState } from '../../core/vocab/store.ts';
-import { memDb, shelfDb } from '../_stories/fixtures.ts';
+import { memDb, seedNotes, shelfDb } from '../_stories/fixtures.ts';
 import { Phone } from '../_stories/Phone.tsx';
 import { HomeView } from './HomeView.tsx';
 
@@ -19,17 +20,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = { loaders: [async () => { const db = await shelfDb(); return { session: { db, prefs: await PrefsStore.load(db) } }; }] };
+export const Default: Story = { loaders: [async () => { const db = await shelfDb(); return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } }; }] };
 /** Later on: the calibration test taken (the estimate comes from the real dictionary). */
 export const Settled: Story = {
   loaders: [async () => {
     const db = await shelfDb();
     await setCalibrationState(db, 'done');
-    return { session: { db, prefs: await PrefsStore.load(db) } };
+    return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } };
+  }],
+};
+/** After talking to 旁注: the 札记 line under the continue block, with yesterday's unread notes (M13, state 2). */
+export const WithNotes: Story = {
+  loaders: [async () => {
+    const db = await shelfDb();
+    await seedNotes(db, { unread: true });
+    return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } };
   }],
 };
 /** Every book deleted: the three bundled books are there to start from. */
-export const EmptyShelf: Story = { loaders: [async () => { const db = await memDb(); return { session: { db, prefs: await PrefsStore.load(db) } }; }] };
+export const EmptyShelf: Story = { loaders: [async () => { const db = await memDb(); return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } }; }] };
 
 /** The capsule shows the toolbar's theme; tapping it switches the page like the app does. */
 function Home({ session, theme }: { session: Session; theme: 'paper' | 'night' }) {

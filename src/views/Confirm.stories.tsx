@@ -7,7 +7,7 @@ import { Confirm } from './Confirm.tsx';
 const meta = {
   title: 'Home/确认 Confirm',
   component: Confirm,
-  args: { title: '删除《The Great Gatsby》？', body: '这本书的阅读进度和查词记录会一起删除。', action: '删除', onCancel: fn(), onConfirm: fn() },
+  args: { title: '删除《The Great Gatsby》？', body: '这本书的阅读进度、查词记录、对话和札记会一起删除。', action: '删除', onCancel: fn(), onConfirm: fn() },
   render: (args) => <HomeScreen><Confirm {...args} /></HomeScreen>,
 } satisfies Meta<typeof Confirm>;
 export default meta;

@@ -103,7 +103,11 @@ export async function streamChat(req: ChatRequest, onText: (text: string) => voi
       buf += decoder.decode(value, { stream: !done }); // `stream` keeps a character split across chunks whole
       let nl = buf.indexOf('\n');
       while (nl >= 0) {
-        if (line(buf.slice(0, nl))) { await reader.cancel().catch(() => {}); return { finish }; }
+        if (line(buf.slice(0, nl))) {
+          // Not awaited: WebKit may never settle cancel() on a body that has already ended, and the answer is complete.
+          reader.cancel().catch(() => {});
+          return { finish };
+        }
         buf = buf.slice(nl + 1);
         nl = buf.indexOf('\n');
       }

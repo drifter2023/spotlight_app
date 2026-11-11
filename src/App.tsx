@@ -9,11 +9,12 @@ import type { Anchor } from './core/types.ts';
 import './styles/home.css';
 import './styles/reader.css';
 import './styles/agent.css';
+import './styles/notes.css';
 import { Flight, type Fly } from './views/Flight.tsx';
 import { HomeView, type OpenRequest } from './views/home/HomeView.tsx';
 import { ReaderView, type ReaderBook } from './views/ReaderView.tsx';
 
-interface Opened { book: ReaderBook; anchor: Anchor | null; from: 'continue' | 'row' }
+interface Opened { book: ReaderBook; anchor: Anchor | null; from: 'continue' | 'row'; agentSession?: string }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
@@ -59,13 +60,13 @@ export function App() {
 
   useEffect(() => (session ? followTheme(session.prefs) : undefined), [session]);
 
-  const open = useCallback(({ book, from }: OpenRequest) => {
+  const open = useCallback(({ book, from, agentSession }: OpenRequest) => {
     if (!session || busy.current) return;
     busy.current = true;
-    opening.current = runOpenFlight(book, from).finally(() => { busy.current = false; opening.current = null; });
+    opening.current = runOpenFlight(book, from, agentSession).finally(() => { busy.current = false; opening.current = null; });
   }, [session]);
 
-  const runOpenFlight = async (book: OpenRequest['book'], from: HTMLElement) => {
+  const runOpenFlight = async (book: OpenRequest['book'], from: HTMLElement, agentSession?: string) => {
     if (!session) return;
     const r = from.getBoundingClientRect();
     const base: Fly = {
@@ -83,7 +84,7 @@ export function App() {
     // Mount the reader only once the expand has finished, so its layout work cannot stall the flight.
     const loaded = await loading;
     if (!loaded) { setFly(null); return; }
-    setOpened({ ...loaded, from: fromKind });
+    setOpened({ ...loaded, from: fromKind, ...(agentSession ? { agentSession } : {}) });
     await frame();
     setReaderOn(true);
     setFly({ ...base, phase: 'page' });
@@ -125,7 +126,7 @@ export function App() {
       {session && <HomeView session={session} onOpen={open} hidden={opened !== null && readerOn} reloadRef={reloadHome} />}
       {opened && session && (
         <div className={readerOn ? 'reader-layer reader-on' : 'reader-layer'}>
-          <ReaderView session={session} book={opened.book} initialAnchor={opened.anchor} onBack={() => void back()} />
+          <ReaderView session={session} book={opened.book} initialAnchor={opened.anchor} onBack={() => void back()} openAgentSession={opened.agentSession} />
         </div>
       )}
       {fly && <Flight fly={fly} />}

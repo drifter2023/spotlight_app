@@ -22,7 +22,11 @@ import { useExposure } from './useExposure.ts';
 import { drawerInner, useWordLookup } from './useWordLookup.tsx';
 
 export interface ReaderBook extends EngineBook { title: string }
-interface Props { session: Session; book: ReaderBook; initialAnchor: Anchor | null; onBack: () => void }
+interface Props {
+  session: Session; book: ReaderBook; initialAnchor: Anchor | null; onBack: () => void;
+  /** Open the Agent drawer on this conversation once the page is in (from Home's 对话 list, Z-11). */
+  openAgentSession?: string | undefined;
+}
 
 /** Idle time before the top bar and capsule fade (owner decision 2026-11-11, review O3; README said 3 s). */
 const CHROME_IDLE_MS = 5000;
@@ -36,7 +40,7 @@ const MIN_SESSION_MS = 5000;
 /** The first-run hint stays this long, then fades (review O2). */
 const HINT_MS = 6000;
 
-export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
+export function ReaderView({ session, book, initialAnchor, onBack, openAgentSession }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const chapterRef = useRef<HTMLSpanElement>(null);
   const eyebrowRef = useRef<HTMLDivElement>(null);
@@ -70,6 +74,9 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     if (open) selectionRef.current.clear(); // a left swipe cancels the selection (and opens the drawer)
     else setAttachment(null); // closing drops the attachment: the next left swipe shows 当前句 (C3)
   });
+  const agentSwipeRef = useRef(agentSwipe);
+  agentSwipeRef.current = agentSwipe;
+  const openAgentRef = useRef(openAgentSession);
   const lookup = useWordLookup(engineRef, session.db, book, session.prefs);
   const lookupRef = useRef(lookup);
   lookupRef.current = lookup;
@@ -153,6 +160,8 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
         }
       }
       firstHint();
+      // From the 对话 list: the drawer opens on that conversation after the page fade (Z-11).
+      if (openAgentRef.current) hintTimers.push(window.setTimeout(() => { if (!cancelled) agentSwipeRef.current.setOpen(true); }, MOTION.pageFade));
     });
 
     return () => {
@@ -233,7 +242,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   return (
     <div ref={shellRef} className="rd-shell">
     <AgentDrawer db={session.db} book={book} engine={engineRef} open={agentOpen} panelRef={panelRef}
-      attachment={attachment} onAttachment={setAttachment} />
+      attachment={attachment} onAttachment={setAttachment} initialSid={openAgentSession} />
     <div ref={pageRef} className={prefs.focusBlur ? 'rd-page' : 'rd-page rd-clear'} style={vars} onClick={onTap}>
       <div className="rd-column">
       <div ref={scrollRef} data-testid="reader-scroll" />

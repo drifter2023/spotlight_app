@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Db } from '../../src/core/db/types.ts';
+import { NotesService } from '../../src/core/notes/service.ts';
 import { PrefsStore } from '../../src/core/prefs/prefs.ts';
 import { ReaderEngine } from '../../src/core/reader/engine.ts';
 import { words } from '../../src/core/reader/words.ts';
@@ -136,7 +137,7 @@ describe('reader reach and the chrome', () => {
     const page = document.createElement('div');
     document.body.append(page);
     root = createRoot(page);
-    flushSync(() => { root!.render(createElement(ReaderView, { session: { db, prefs }, book, initialAnchor: null, onBack: () => {} })); });
+    flushSync(() => { root!.render(createElement(ReaderView, { session: { db, prefs, notes: new NotesService(db) }, book, initialAnchor: null, onBack: () => {} })); });
     await waitFor('.rd-line[data-p]');
     await frames(2);
   }
@@ -152,7 +153,7 @@ describe('reader reach and the chrome', () => {
     document.body.append(page);
     root = createRoot(page);
     const book: ReaderBook = { ...makeBook(1, 20), title: 'Again' };
-    flushSync(() => { root!.render(createElement(ReaderView, { session: { db: stubDb(), prefs }, book, initialAnchor: null, onBack: () => {} })); });
+    flushSync(() => { root!.render(createElement(ReaderView, { session: { db: stubDb(), prefs, notes: new NotesService(stubDb()) }, book, initialAnchor: null, onBack: () => {} })); });
     await waitFor('.rd-line[data-p]');
     await sleep(500);
     expect(document.querySelector('.rd-hint')).toBeNull();

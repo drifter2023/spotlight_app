@@ -17,7 +17,7 @@ System prompt (`src/core/agent/prompt.ts`, never varies, so it is prefix-cached)
 | ID | Check |
 |---|---|
 | **A-01** | A left drag over 8 px (more horizontal than vertical) moves the page and scales it into a card with a strip of page left; a flick or p > 0.45 snaps open; opening sends no request. Right drag / strip tap / Esc closes. |
-| **A-02** | An exchange (question + selected sentence + answer + 出处) is stored once the answer is complete; the session is titled after the first question, listed newest first, and deleted with the book. After a reload the conversation is still there. |
+| **A-02** | An exchange (question + selected sentence + answer + 出处) is stored once the answer is complete; the session is titled after the first question, listed newest first, and deleted with the book, and can be deleted on Home (Z-11). After a reload the conversation is still there. |
 | **A-03** | The picker shows the paragraph around the reader's position ±1; the sentence on its middle line is the selected one and is sent with the question. Used suggestions leave the list. |
 | **A-04** | The prompt and message layout are snapshot-tested; the 出处 line is split off, and a half-written one is never shown while streaming. |
 | **A-05** | No key → 「先在首页填写 DeepSeek API Key」; network / server / timeout / empty answer → reason + 重试; nothing is stored. |

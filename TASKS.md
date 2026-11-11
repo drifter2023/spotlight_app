@@ -94,3 +94,13 @@ Each task lists its acceptance ID from `design/MVP 设计与范围 · 聚焦阅�
 
 ## M10 · Account sync and one-time book transfer — planned, not started (its task numbers 46–53 in the plan will be renumbered when it starts)
 Plan: `docs/plans/2026-10-13-sync-and-transfer.md`; checklist: `docs/todo/sync-and-transfer.md`. Needs the owner's decisions (plan §11) and a scope edit to `CLAUDE.md` before any code. Acceptance IDs C-01 to C-11.
+
+## M13 · 札记 (plan: `docs/plans/2026-11-11-zhaji.md`; owner decision 2026-11-11, defaults D1–D12)
+61. Migration v8 (`agent_message.loc`, `note_entry`, `note_item`); `agent/store.ts`: `listAllSessions`, `deleteSession`, `loc` in `saveExchange`; `AgentService` and `AgentDrawer` pass `loc`. **Z-01 Z-12**
+62. `useSwipeReveal` out of `ShelfRow`; `NotesPage` with the 对话 view (all books, newest first, swipe → 删除 → confirm, empty); `App` / `ReaderView` / `AgentDrawer` open a book on a given conversation at the reader's own position. **Z-11**
+63. `src/core/notes/` (`day`, `store`, `prompt`, `parse`, `service`); `session.notes` in `src/app/boot.ts`. One entry per book per reading day (04:00 boundary), appended to and never redone; ≤ 3 requests per pass; automatic only when Home appears, closed days, `notes.auto = on`, a key, 6 h back-off. **Z-02 Z-03 Z-04 Z-05 Z-06 Z-07 Z-08**
+64. 札记 journal view (`Journal`, `NoteCard`): newest day first, one block per book, label · quote · 要点 · 说明, 你问 expands the exchange, swipe → 删除 one note; pending / generating / error / no-key states; first-run sentence; 自动整理 switch. **Z-10 Z-13 Z-14**
+65. Home: `NotesLine` (five states, no numbers), `runAuto()` when Home appears, the book delete `Confirm` copy, the key card fine print. **Z-07 Z-09**
+66. Stories and fixtures; contrast and layout browser tests; `tests/e2e/notes.spec.ts` with faked DeepSeek. **Z-09 Z-10**
+
+Later (phase 3, separate branches): 67. 上周的札记 on the Home line (**Z-15**). 68. 在书里看 peek mode (**Z-16**). 69. 这天保存的词 under an entry (D8). 70. Drawer continues the newest conversation only within the same chapter and reading day (D6); long-press delete in the history dropdown. 71. 整理更早的对话; search in 对话.

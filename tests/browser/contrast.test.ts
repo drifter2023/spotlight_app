@@ -1,6 +1,8 @@
 import '../../src/styles/fonts.css';
 import '../../src/styles/tokens.css';
 import '../../src/styles/reader.css';
+import '../../src/styles/home.css';
+import '../../src/styles/notes.css';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Review O4 (owner decision 2026-11-11): the eyebrow and both footnote kinds meet 4.5 : 1 in both themes,
@@ -39,6 +41,29 @@ describe('small text contrast (review O4)', () => {
       expect(ratio(predicted!)).toBeLessThan(ratio(saved!));
       expect(getComputedStyle(predicted!).fontWeight).toBe('400');
       expect(getComputedStyle(saved!).fontWeight).toBe('500');
+    });
+  }
+});
+
+// 札记 (Z-09, Z-10): secondary text on Home colours — the line's second line, a note's label, 「你问」, a 对话 row's meta.
+function ratioOnHome(el: Element): number {
+  const fg = rgba(getComputedStyle(el).color);
+  const bg = rgba(getComputedStyle(document.documentElement).getPropertyValue('--home-bg'));
+  const mix = [0, 1, 2].map((i) => fg[i]! * fg[3] + bg[i]! * (1 - fg[3]));
+  const a = lum(mix), b = lum(bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+describe('札记 small text contrast (Z-09, Z-10)', () => {
+  for (const theme of ['paper', 'night'] as const) {
+    it(`${theme}: the Home line's second line, a note's label, 你问 and a row's meta reach 4.5 : 1`, () => {
+      document.documentElement.dataset.theme = theme;
+      document.body.innerHTML = '<div class="home"><button class="notes-line"><span class="notes-line-l2">网络连接失败</span></button></div>'
+        + '<div class="notes"><span class="note-label">词义 · Chapter I</span><button class="note-ask">你问：这里的指代是谁</button>'
+        + '<span class="conv-meta"><span>The Great Gatsby</span></span><p class="notes-copy">还没有对话。</p></div>';
+      for (const s of ['.notes-line-l2', '.note-label', '.note-ask', '.conv-meta', '.notes-copy']) {
+        expect(ratioOnHome(document.querySelector(s)!), s).toBeGreaterThanOrEqual(4.5);
+      }
     });
   }
 });

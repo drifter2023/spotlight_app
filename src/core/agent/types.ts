@@ -8,3 +8,13 @@ export interface AgentSession {
 export type AgentMessage =
   | { role: 'user'; text: string; quote?: string; at: number }
   | { role: 'agent'; text: string; cite?: string; at: number };
+
+/** Where a question was asked: the picked sentence, or the reader's anchor for a 问旁注 selection (M13, Z-12). */
+export interface AgentLoc { chapter: number; para: number; sentence: number }
+
+/** A row of the 对话 list on Home's 札记 page: every book, newest first (Z-11). */
+export interface SessionListItem extends AgentSession {
+  bookTitle: string;
+  /** The first question's quote (the sentence or the selection it was about). */
+  quote: string;
+}

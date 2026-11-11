@@ -1,5 +1,8 @@
 // Story fixtures (Storybook only; never imported by the app). Real text from the bundled Gatsby.
+import { createSession, saveExchange } from '../../core/agent/store.ts';
 import { migrate } from '../../core/db/migrations.ts';
+import { dayKey } from '../../core/notes/day.ts';
+import { listExchanges, markRead, saveEntry } from '../../core/notes/store.ts';
 import { colorIndex, markOpened, saveParsedBook, type ShelfBook } from '../../core/library/library.ts';
 import { loadSqlJs } from '../../core/db/sqljs.ts';
 import type { Db, SqlValue } from '../../core/db/types.ts';
@@ -112,4 +115,58 @@ export async function shelfDb(): Promise<Db> {
     if (b.chapter) await db.run('INSERT INTO position (book_id, chapter, para, sentence, updated_at) VALUES (?, ?, 0, 0, ?)', [b.id, b.chapter, NOW]);
   }
   return db;
+}
+
+// --- 札记 (M13): conversations and their notes, written into the db as the app stores them (no DeepSeek) ---
+
+/** Questions with 旁注's answers, as stored conversations. `daysAgo` counts reading days back from now. */
+export const EXCHANGES = [
+  {
+    book: 'gatsby', session: 'g1', chapter: 0, label: 'Chapter I', daysAgo: 1, quote: PARAS[0]![0]!,
+    question: '这里的 vulnerable 是什么意思', answer: '这里不是「脆弱」，而是年轻、涉世未深、容易受影响。叙述者回望自己年轻时的样子，为下文父亲的忠告作铺垫。', cite: 'younger and more vulnerable years',
+  },
+  {
+    book: 'gatsby', session: 'g1', chapter: 0, label: 'Chapter I', daysAgo: 1, quote: PARAS[2]![0]!,
+    question: '这里的指代是谁', answer: 'that 指父亲嘴上说的那句话。叙述者是说父亲话里有话，没说出口的比说出口的多。', cite: 'a great deal more than that',
+  },
+  {
+    book: 'farewell', session: 'f1', chapter: 0, label: 'Chapter I', daysAgo: 2, quote: 'In the late summer of that year we lived in a house in a village that looked across the river and the plain to the mountains.',
+    question: '这段的语气', answer: '平静、克制，几乎只写看见的东西，不写感受。句子很长却没有形容情绪的词，这是海明威常用的写法。', cite: '',
+  },
+] as const;
+
+/** The notes DeepSeek would have made from EXCHANGES, by index. */
+export const NOTES = [
+  { ex: 0, kind: '词义', point: 'vulnerable 在这里是「涉世未深」，不是脆弱', detail: '说的是年轻时容易受影响、没有防备，和下文父亲的告诫呼应。' },
+  { ex: 1, kind: '指代', point: 'that 指父亲嘴上说的那句话', detail: '叙述者是说父亲话里有话，没说出口的比说出的多。' },
+  { ex: 2, kind: '语气', point: '只写看见的，不写感受', detail: '长句里没有一个形容情绪的词，平静本身就是语气。' },
+] as const;
+
+/**
+ * Stores EXCHANGES in `db` (which must hold the shelf books) and, with `notes`, their 札记 entries.
+ * `unread`: leave the newest entry unread, as the Home line's state 2 shows it.
+ */
+export async function seedNotes(db: Db, { notes = true, unread = false, now = Date.now() } = {}): Promise<void> {
+  const made = new Set<string>();
+  for (const [i, x] of EXCHANGES.entries()) {
+    const at = now - x.daysAgo * DAY + i * 60_000;
+    if (!made.has(x.session)) {
+      made.add(x.session);
+      await createSession(db, { id: x.session, bookId: x.book, chapter: x.chapter, chapterLabel: x.label, title: '', anchorPara: 0, anchorSentence: 0, updatedAt: at });
+    }
+    await saveExchange(db, x.session, { question: x.question, quote: x.quote, answer: x.answer, ...(x.cite ? { cite: x.cite } : {}), loc: { chapter: x.chapter, para: 0, sentence: 0 } }, at);
+  }
+  if (!notes) return;
+  const all = await listExchanges(db, 0);
+  const byDay = new Map<string, typeof all>();
+  for (const x of all) { const k = `${x.bookId} ${dayKey(x.at)}`; byDay.set(k, [...(byDay.get(k) ?? []), x]); }
+  for (const list of byDay.values()) {
+    const first = list[0]!;
+    await saveEntry(db, {
+      bookId: first.bookId, day: dayKey(first.at), lastMsgId: list.at(-1)!.messageId, promptVersion: 1,
+      notes: NOTES.filter((n) => list.includes(all[n.ex]!)).map((n) => ({ kind: n.kind, point: n.point, detail: n.detail, exchange: all[n.ex]! })),
+    }, now);
+  }
+  if (!unread) await markRead(db, now);
+  else await db.run('UPDATE note_entry SET read_at = ? WHERE day < (SELECT MAX(day) FROM note_entry)', [now]);
 }

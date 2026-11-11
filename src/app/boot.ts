@@ -6,10 +6,12 @@ import type { Db } from '../core/db/types.ts';
 import { openWebDb } from '../core/db/web.ts';
 import { BUNDLED } from '../core/library/bundled.ts';
 import { backfillBundledCovers, seedBundled } from '../core/library/library.ts';
+import { NotesService } from '../core/notes/service.ts';
 import { PrefsStore } from '../core/prefs/prefs.ts';
 import type { ParsedBook } from '../core/types.ts';
 
-export interface Session { db: Db; prefs: PrefsStore }
+/** `notes` makes 札记 (M13): one per app session, so a run outlives the view that started it. */
+export interface Session { db: Db; prefs: PrefsStore; notes: NotesService }
 
 let booting: Promise<Session> | null = null;
 
@@ -28,5 +30,5 @@ async function start(): Promise<Session> {
     return (await res.json()) as ParsedBook;
   });
   await backfillBundledCovers(db, BUNDLED.map((b) => b.id));
-  return { db, prefs: await PrefsStore.load(db) };
+  return { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) };
 }
