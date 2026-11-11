@@ -9,7 +9,9 @@ import { deleteBook, listShelf, restoreBundled, type ShelfBook } from '../../cor
 import type { Theme } from '../../core/prefs/prefs.ts';
 import type { ParsedBook } from '../../core/types.ts';
 import { Confirm } from '../Confirm.tsx';
+import { NotesPage } from '../notes/NotesPage.tsx';
 import { ImportChooser } from './ImportChooser.tsx';
+import { NotesLine } from './NotesLine.tsx';
 import { ShelfRow } from './ShelfRow.tsx';
 import { VocabCard } from './VocabCard.tsx';
 
@@ -41,6 +43,18 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
   const fileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const openAfterLoad = useRef<string | null>(null);
+  /** The 札记 page, opened from the Home line (M13). `focus`: the unread entry it was opened for. */
+  const [notesPage, setNotesPage] = useState<{ focus?: number } | null>(null);
+  const [notesVersion, setNotesVersion] = useState(0);
+  /** The reader was open in this app session: the line may offer to 整理 today (§3.3 state 4). */
+  const [afterReading, setAfterReading] = useState(false);
+
+  // Home on screen (app start, or back from the reader): one automatic 札记 pass, if the reader opted in (Z-07).
+  useEffect(() => {
+    if (hidden) { setAfterReading(true); return; }
+    setNotesVersion((v) => v + 1);
+    void session.notes.runAuto();
+  }, [hidden, session]);
 
   const reload = async () => setShelf(await listShelf(session.db));
   useEffect(() => { void reload(); }, [session]);
@@ -126,6 +140,7 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
           </section>
         )}
         {current && <hr className="rule rule-continue" />}
+        <NotesLine session={session} version={notesVersion} afterReading={afterReading} onOpenPage={(focus) => setNotesPage(focus === undefined ? {} : { focus })} />
 
         <div className="shelf-head">
           <span className="eyebrow">Shelf</span>
@@ -202,10 +217,24 @@ export function HomeView({ session, onOpen, hidden, reloadRef }: {
         />
       )}
 
+      {notesPage && (
+        <NotesPage
+          session={session}
+          focusEntry={notesPage.focus}
+          onClose={() => { setNotesPage(null); setNotesVersion((v) => v + 1); }}
+          onOpenConversation={(item, el) => {
+            const book = shelf.find((b) => b.id === item.bookId);
+            if (!book) return;
+            onOpen({ book, from: el, agentSession: item.id });
+            setNotesPage(null);
+          }}
+        />
+      )}
+
       {confirm && (
         <Confirm
           title={`删除《${confirm.title}》？`}
-          body="这本书的阅读进度和查词记录会一起删除。"
+          body="这本书的阅读进度、查词记录、对话和札记会一起删除。"
           action="删除"
           onCancel={() => setConfirm(null)}
           onConfirm={() => {

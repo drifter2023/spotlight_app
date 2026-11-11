@@ -1,0 +1,117 @@
+/* 札记 (M13, docs/plans/2026-11-11-zhaji.md §3.3–3.4): the Home line and the page. Home tokens only, both themes. */
+
+/* --- The Home line (Z-09): one button under the continue block, one accent at most --- */
+.notes-line {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; margin: 0; padding: 10px 0; box-sizing: border-box;
+  border: 0; background: none; text-align: left; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.notes-line-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.notes-line .eyebrow { letter-spacing: .16em; }
+.notes-line-l1 { font: 400 14px/1.35 var(--zh); color: var(--ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notes-line-l2 { font: 400 12.5px/1.4 var(--zh); color: var(--sec); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notes-line-act { flex: none; min-width: 44px; min-height: 44px; display: grid; place-items: center end; font: 500 13px/1 var(--zh); color: var(--accent); }
+.notes-line-act[data-chev] { font: 400 20px/1 'IBM Plex Sans', system-ui, sans-serif; color: var(--sec); }
+.rule-notes { margin: 0 0 20px; }
+
+/* --- The page: a full-screen layer over Home, as the calibration test --- */
+.notes {
+  --zh: 'PingFang SC', 'Noto Sans SC', 'Hiragino Sans GB', system-ui, sans-serif;
+  --sec: rgba(var(--ink-rgb), .62);
+  --serif: 'Newsreader Variable', 'Newsreader', Georgia, serif;
+  position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column;
+  background: var(--home-bg); color: var(--ink); animation: fadeIn 220ms var(--ease) both;
+}
+.notes[data-closing] { animation: notesOut 220ms var(--ease) both; pointer-events: none; }
+@keyframes notesOut { from { opacity: 1 } to { opacity: 0 } }
+.notes-top { flex: none; padding: calc(env(safe-area-inset-top) + 8px) 24px 0; }
+.notes-back {
+  min-height: 44px; min-width: 44px; margin-left: -8px; padding: 0 8px; border: 0; background: none;
+  font: 400 13px/1 var(--zh); color: var(--ink); -webkit-tap-highlight-color: transparent;
+}
+.notes-top .filter { margin-top: 4px; }
+.notes-view { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px calc(env(safe-area-inset-bottom) + 28px); }
+.notes-view[hidden] { display: none; }
+.notes-copy { margin: 22px 0 6px; font: 400 13px/1.6 var(--zh); color: var(--sec); }
+.notes-copy-ink { color: var(--ink); }
+.notes-action {
+  min-height: 44px; min-width: 44px; margin: 0 -8px; padding: 0 8px; border: 0; background: none;
+  font: 500 13px/1 var(--zh); color: var(--accent); -webkit-tap-highlight-color: transparent;
+}
+.notes-action:disabled { color: var(--sec); font-weight: 400; }
+.notes-once { margin: 18px 0 0; font: 400 12px/1.6 var(--zh); color: var(--sec); }
+
+/* Journal: days by rules, one block per book */
+.notes-day { padding: 22px 0 6px; border-bottom: 1px solid rgba(var(--ink-rgb), .1); }
+.notes-day:last-of-type { border-bottom: 0; }
+.notes-day-head { margin: 0 0 12px; }
+.notes-book { margin: 0 0 6px; }
+.notes-book + .notes-book { margin-top: 18px; }
+.notes-book-title { margin: 0 0 4px; font: 400 20px/1.2 var(--serif); color: var(--ink); }
+.notes-state { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font: 400 13px/1.5 var(--zh); color: var(--sec); }
+.notes-state[data-tone='error'] { color: var(--danger); }
+.notes-dots { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
+.notes-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: notesDot 1.2s var(--ease) infinite; }
+.notes-dots i:nth-child(2) { animation-delay: .2s; }
+.notes-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes notesDot { 0%, 80%, 100% { opacity: .25 } 40% { opacity: 1 } }
+
+/* A note (NoteCard): label, quote, 要点, 说明, 你问 */
+.note-wrap { position: relative; overflow: hidden; }
+.note {
+  position: relative; z-index: 1; padding: 14px 0 0; background: var(--home-bg);
+  touch-action: pan-y; user-select: none; -webkit-user-select: none;
+}
+.note-label { display: block; font: 400 11px/1.4 var(--zh); letter-spacing: .04em; color: var(--sec); }
+.note-quote {
+  margin: 8px 0 0; font: 400 17px/26px var(--serif); color: var(--ink);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+.note-point { margin: 10px 0 0; font: 500 15px/24px var(--zh); color: var(--ink); }
+.note-detail { margin: 4px 0 0; font: 400 14px/23px var(--zh); color: rgba(var(--ink-rgb), .8); }
+.note-ask {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; margin: 2px 0 0; padding: 0;
+  border: 0; background: none; text-align: left; font: 400 13px/1.4 var(--zh); color: var(--sec); -webkit-tap-highlight-color: transparent;
+}
+.note-ask span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.note-ask svg { flex: none; transition: transform 220ms var(--ease); }
+.note-ask[aria-expanded='true'] svg { transform: rotate(180deg); }
+.note-ex { padding: 2px 0 12px; }
+.note-ex-q { display: flex; justify-content: flex-end; }
+.note-ex-bubble { max-width: 82%; padding: 9px 13px; border-radius: 16px 16px 4px 16px; background: var(--ink); color: var(--home-bg); font: 400 14px/1.5 var(--zh); }
+.note-ex-tag { display: flex; align-items: center; gap: 6px; margin: 12px 0 5px; font: 500 11px/1 var(--zh); color: var(--sec); }
+.note-ex-tag i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.note-ex-answer { margin: 0; font: 400 14px/1.65 var(--zh); color: var(--ink); }
+.note-ex-cite { display: inline-block; margin-top: 8px; padding: 4px 9px; border-radius: 10px; background: rgba(var(--ink-rgb), .07); font: 400 12px/1.4 var(--serif); color: var(--sec); }
+.note-del, .conv-del {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 88px; border: 0; background: var(--accent); color: var(--on-accent);
+  font: 500 13px/1 var(--zh);
+}
+
+/* 自动整理 (Z-13): the page's only setting, its last block */
+.notes-auto { margin-top: 24px; padding-top: 6px; border-top: 1px solid rgba(var(--ink-rgb), .1); }
+.notes-auto-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font: 400 14px/1 var(--zh); color: var(--ink); }
+.notes-auto p { margin: 2px 0 0; font: 400 12px/1.6 var(--zh); color: var(--sec); }
+.notes-switch {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0;
+  border-radius: 13px; background: rgba(var(--ink-rgb), .18); transition: background 220ms var(--ease);
+}
+.notes-switch::before { content: ''; position: absolute; inset: -9px 0; } /* 44 px hit target */
+.notes-switch::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--home-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .35); transition: transform 220ms var(--ease);
+}
+.notes-switch:checked { background: var(--accent); }
+.notes-switch:checked::after { transform: translateX(18px); }
+
+/* 对话: every conversation, newest first */
+.conv-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.conv-wrap { position: relative; overflow: hidden; border-bottom: 1px solid rgba(var(--ink-rgb), .07); }
+.conv {
+  position: relative; z-index: 1; display: flex; flex-direction: column; gap: 5px; min-height: 76px; padding: 14px 0; box-sizing: border-box;
+  background: var(--home-bg); cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.conv-quote { font: 400 15px/22px var(--serif); color: var(--ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conv-title { font: 400 14px/1.4 var(--zh); color: var(--ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conv-meta { display: flex; justify-content: space-between; gap: 12px; font: 400 12px/1.4 'IBM Plex Sans', var(--zh); color: var(--sec); }
+.conv-meta span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conv-meta span:last-child { flex: none; }

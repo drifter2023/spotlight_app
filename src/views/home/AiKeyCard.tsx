@@ -6,7 +6,7 @@ import type { Db } from '../../core/db/types.ts';
 type Note = { tone: 'error' | 'quiet'; text: string } | null;
 
 /**
- * The DeepSeek API key used by the grammar drawer and the Agent drawer (G-01).
+ * The DeepSeek API key used by the grammar drawer, the Agent drawer and 札记 (G-01).
  * Saved only after `checkKey` (`GET /models`) accepts it. `place` is where it sits:
  * the paper card, inline in the Agent drawer, or on the grammar drawer's leather.
  */
@@ -90,7 +90,7 @@ export function AiKeyCard({ db, onSaved, place = 'card', initiallyEditing = fals
         </div>
       )}
       {note && <p className={note.tone === 'error' ? 'ai-note ai-note-error' : 'ai-note'} role="status">{note.text}</p>}
-      <p className="ai-fine">语法分析和旁注提问会把内容发给 DeepSeek。Key 只保存在这台设备上。</p>
+      <p className="ai-fine">语法分析、旁注提问和札记整理会把内容发给 DeepSeek。Key 只保存在这台设备上。</p>
     </section>
   );
 }

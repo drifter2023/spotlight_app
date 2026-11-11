@@ -5,6 +5,7 @@ import '../src/styles/tokens.css';
 import '../src/styles/home.css';
 import '../src/styles/reader.css';
 import '../src/styles/agent.css';
+import '../src/styles/notes.css';
 
 /** 纸白 / 夜读, as the Home capsule sets it: `data-theme` on <html>. */
 const withTheme: Decorator = (Story, ctx) => {

@@ -5,7 +5,7 @@ import type { Session } from '../../app/boot.ts';
 import { NotesService } from '../../core/notes/service.ts';
 import { PrefsStore } from '../../core/prefs/prefs.ts';
 import { setCalibrationState } from '../../core/vocab/store.ts';
-import { memDb, shelfDb } from '../_stories/fixtures.ts';
+import { memDb, seedNotes, shelfDb } from '../_stories/fixtures.ts';
 import { Phone } from '../_stories/Phone.tsx';
 import { HomeView } from './HomeView.tsx';
 
@@ -26,6 +26,14 @@ export const Settled: Story = {
   loaders: [async () => {
     const db = await shelfDb();
     await setCalibrationState(db, 'done');
+    return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } };
+  }],
+};
+/** After talking to 旁注: the 札记 line under the continue block, with yesterday's unread notes (M13, state 2). */
+export const WithNotes: Story = {
+  loaders: [async () => {
+    const db = await shelfDb();
+    await seedNotes(db, { unread: true });
     return { session: { db, prefs: await PrefsStore.load(db), notes: new NotesService(db) } };
   }],
 };

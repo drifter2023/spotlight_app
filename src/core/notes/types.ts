@@ -26,6 +26,8 @@ export interface NoteItem {
   id: number; entryId: number; sessionId: string; messageId: number; ord: number;
   kind: NoteKind; point: string; detail: string; quote: string;
   chapter: number; para: number; sentence: number; chapterLabel: string;
+  /** The question it came from, shown as 「你问：…」. */
+  question: string;
 }
 
 /** The notes for one book on one reading day. */

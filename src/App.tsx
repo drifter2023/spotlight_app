@@ -9,6 +9,7 @@ import type { Anchor } from './core/types.ts';
 import './styles/home.css';
 import './styles/reader.css';
 import './styles/agent.css';
+import './styles/notes.css';
 import { Flight, type Fly } from './views/Flight.tsx';
 import { HomeView, type OpenRequest } from './views/home/HomeView.tsx';
 import { ReaderView, type ReaderBook } from './views/ReaderView.tsx';

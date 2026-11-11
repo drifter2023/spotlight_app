@@ -133,7 +133,7 @@ interface EntryRow {
 }
 interface ItemRow {
   id: number; entry_id: number; session_id: string; message_id: number; ord: number; kind: string; point: string; detail: string;
-  quote: string; chapter: number; para: number; sentence: number; chapter_label: string;
+  quote: string; chapter: number; para: number; sentence: number; chapter_label: string; question: string | null;
 }
 
 const kindOf = (k: string): NoteKind => ((NOTE_KINDS as readonly string[]).includes(k) ? (k as NoteKind) : '');
@@ -141,13 +141,14 @@ const kindOf = (k: string): NoteKind => ((NOTE_KINDS as readonly string[]).inclu
 async function withItems(db: Db, rows: EntryRow[]): Promise<NoteEntry[]> {
   if (!rows.length) return [];
   const items = await db.all<ItemRow>(
-    `SELECT * FROM note_item WHERE entry_id IN (${rows.map(() => '?').join(',')}) ORDER BY entry_id, ord`, rows.map((r) => r.id));
+    `SELECT i.*, m.text AS question FROM note_item i LEFT JOIN agent_message m ON m.id = i.message_id
+      WHERE i.entry_id IN (${rows.map(() => '?').join(',')}) ORDER BY i.entry_id, i.ord`, rows.map((r) => r.id));
   const by = new Map<number, NoteItem[]>();
   for (const i of items) {
     const list = by.get(i.entry_id) ?? [];
     list.push({
       id: i.id, entryId: i.entry_id, sessionId: i.session_id, messageId: i.message_id, ord: i.ord, kind: kindOf(i.kind),
-      point: i.point, detail: i.detail, quote: i.quote, chapter: i.chapter, para: i.para, sentence: i.sentence, chapterLabel: i.chapter_label,
+      point: i.point, detail: i.detail, quote: i.quote, chapter: i.chapter, para: i.para, sentence: i.sentence, chapterLabel: i.chapter_label, question: i.question ?? '',
     });
     by.set(i.entry_id, list);
   }
