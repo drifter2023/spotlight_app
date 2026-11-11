@@ -57,8 +57,9 @@
   position: absolute; top: 58px; left: 0; right: 0; padding: 0 34px; z-index: 3; pointer-events: none;
   display: flex; justify-content: space-between;
   font: 400 11px/1 'IBM Plex Sans', system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase;
-  color: rgba(var(--reader-ink-rgb), .38);
+  color: rgba(var(--reader-ink-rgb), .62); /* 4.55 : 1; was .38 (2.30 : 1). Review O4, owner 2026-11-11 */
 }
+:root[data-theme='night'] .rd-eyebrow { color: rgba(var(--reader-ink-rgb), .5); } /* 4.74 : 1 */
 /* Fallback tier (R-01): two static blur layers instead of per-line blur. */
 .rd-bblur {
   position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
@@ -88,11 +89,15 @@
 .rd-fn {
   position: absolute; left: 0; top: calc(var(--fs, 19.5px) * 1.18); /* 23px at M (19.5/34), scaled for S and L */
   font: 500 9px/1 'PingFang SC', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif;
-  letter-spacing: .04em; color: rgba(var(--reader-ink-rgb), .6);
+  letter-spacing: .04em; color: rgba(var(--reader-ink-rgb), .66); /* saved: 5.17 : 1 (was .6, 4.28 : 1). Review O4 */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: max(100%, 6em);
   pointer-events: none; -webkit-font-smoothing: antialiased;
 }
-.rd-fn-predicted { color: rgba(var(--reader-ink-rgb), .38); }
+/* Predicted glosses stay lighter than saved ones, but readable: .62 (4.55 : 1) and a lighter weight, so the
+   two still differ at a glance (review O4; was .38, 2.30 : 1). */
+.rd-fn-predicted { color: rgba(var(--reader-ink-rgb), .62); font-weight: 400; }
+:root[data-theme='night'] .rd-fn { color: rgba(var(--reader-ink-rgb), .6); } /* 6.37 : 1 */
+:root[data-theme='night'] .rd-fn-predicted { color: rgba(var(--reader-ink-rgb), .5); } /* 4.74 : 1 */
 .rd-gap { display: flow-root; }
 .rd-gapline { z-index: 4; } /* the line above an open drawer: its footnote hangs into the notch */
 
