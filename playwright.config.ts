@@ -5,7 +5,12 @@ const phone = { viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, isM
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
-  use: { baseURL: 'http://localhost:4173' },
+  use: {
+    baseURL: 'http://localhost:4173',
+    // On CI, keep what a failure looked like (trace with DOM snapshots, a screenshot) for the artifact.
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    screenshot: process.env.CI ? 'only-on-failure' : 'off',
+  },
   // CI already ran `npm run build` (dictionary included). Starting preview only avoids building it again.
   webServer: {
     command: process.env.CI ? 'npm run preview' : 'npm run build && npm run preview',
