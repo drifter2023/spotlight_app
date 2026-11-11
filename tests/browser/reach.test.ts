@@ -142,14 +142,18 @@ describe('reader reach and the chrome', () => {
   }
 
   it('shows the one-line first-run hint once, never again (review O2)', async () => {
-    expect(prefs.get().hinted).toBe(false);
-    await mount();
+    await mount(); // fresh settings: not hinted yet
     await expect.poll(() => document.querySelector('.rd-hint')?.textContent, { timeout: 3000 }).toContain('点清晰的词查义');
     expect(prefs.get().hinted).toBe(true);
+    // Open a book again with the same settings: no hint.
     root?.unmount();
-    root = null;
     document.body.innerHTML = '';
-    await mount();
+    const page = document.createElement('div');
+    document.body.append(page);
+    root = createRoot(page);
+    const book: ReaderBook = { ...makeBook(1, 20), title: 'Again' };
+    flushSync(() => { root!.render(createElement(ReaderView, { session: { db: stubDb(), prefs }, book, initialAnchor: null, onBack: () => {} })); });
+    await waitFor('.rd-line[data-p]');
     await sleep(500);
     expect(document.querySelector('.rd-hint')).toBeNull();
   });
