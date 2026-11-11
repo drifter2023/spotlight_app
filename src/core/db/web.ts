@@ -18,8 +18,11 @@ export async function openWebDb(name: string): Promise<Db> {
 
   let inTx = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** While the page is hidden or unloading, a write is saved at once: a debounce timer may never fire. */
+  let leaving = false;
   const save = async (): Promise<void> => {
     clearTimeout(timer);
+    timer = undefined;
     const bytes = d.export();
     d.run('PRAGMA foreign_keys = ON'); // export() reopens the database, which resets pragmas
     await idbPut(name, bytes);
@@ -27,13 +30,21 @@ export async function openWebDb(name: string): Promise<Db> {
   const persist = (): void => {
     if (inTx) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { void save(); }, PERSIST_DELAY_MS);
+    if (leaving) { timer = undefined; void save(); return; }
+    timer = setTimeout(() => { timer = undefined; void save(); }, PERSIST_DELAY_MS);
   };
-  // Hiding the page may be the last chance to write (iOS Safari can kill a backgrounded tab).
+  // Hiding the page may be the last chance to write (iOS Safari can kill a backgrounded tab). Listeners
+  // registered after this one (the reader flushing its position on pagehide) write later in the same
+  // event, so from here on every write is saved at once instead of being debounced.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && timer !== undefined) void save();
+    leaving = document.visibilityState === 'hidden';
+    if (leaving && timer !== undefined) void save();
   });
-  window.addEventListener('pagehide', () => { if (timer !== undefined) void save(); });
+  window.addEventListener('pagehide', () => {
+    leaving = true;
+    if (timer !== undefined) void save();
+  });
+  window.addEventListener('pageshow', () => { leaving = document.visibilityState === 'hidden'; });
 
   return {
     async exec(sql) { d.exec(sql); persist(); },
