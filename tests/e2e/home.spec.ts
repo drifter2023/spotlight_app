@@ -181,6 +181,12 @@ test('Night mode: the Home capsule switches the whole app, survives a reload, ke
   // Small text on Home (≥ 4.5:1, README → Quality bar).
   const [sec, bg] = await page.evaluate(() => [getComputedStyle(document.querySelector('.row-author')!).color, getComputedStyle(document.querySelector('.home')!).backgroundColor]);
   expect(contrast(sec!, bg!)).toBeGreaterThanOrEqual(4.5);
+  // One night accent: Home uses the reader's pink, not a second colour (review O6).
+  const [accent, readerAccent] = await page.evaluate(() => {
+    const cs = getComputedStyle(document.documentElement);
+    return [cs.getPropertyValue('--accent').trim().toLowerCase(), cs.getPropertyValue('--reader-accent').trim().toLowerCase()];
+  });
+  expect(accent).toBe(readerAccent);
 
   // Applied before the app boots, so a reload never flashes paper white.
   await page.waitForTimeout(600); // user.db persists after a 300 ms debounce

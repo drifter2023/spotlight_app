@@ -25,7 +25,7 @@
   --home-bg: #0b0c0f;
   --ink: #eceef2;
   --ink-rgb: 236, 238, 242;
-  --accent: #f0b429;
+  --accent: #ffb4b4; /* one night accent across Home and the reader (owner decision 2026-11-11, review O6; was amber #f0b429) */
   --on-accent: #0b0c0f;
   --surface: #15171c;
   --danger: #ff8a7a;
