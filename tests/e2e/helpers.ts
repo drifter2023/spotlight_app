@@ -1,9 +1,10 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Route } from '@playwright/test';
 
 /** Waits for body lines and for the first-launch probe to finish. */
 export async function ready(page: Page) {
   await page.locator('.rd-line[data-p]').first().waitFor();
-  await expect(page.locator('.rd-probing')).toHaveCount(0, { timeout: 20_000 });
+  // The first-launch probe measures frames; on a shared CI runner WebKit takes longer than 20 s.
+  await expect(page.locator('.rd-probing')).toHaveCount(0, { timeout: process.env.CI ? 45_000 : 20_000 });
 }
 
 /** Skips the probe in tests that don't measure it (the tier is a stored setting). */
@@ -50,6 +51,30 @@ export async function wordInBand(page: Page, word: string, nth = 0): Promise<{ x
 export async function tapTitle(page: Page) {
   const vp = page.viewportSize()!;
   await page.mouse.click(vp.width / 2, 64);
+}
+
+/**
+ * Stores a DeepSeek key from the grammar drawer's no-key form. The caller must already be stubbing
+ * `api.deepseek.com` (the confirm step calls `GET /models`). The analysis that follows is answered
+ * with 503 and not recorded, so a later droplet is the first real request.
+ */
+export async function saveDeepSeekKey(page: Page, key = 'sk-e2e-good') {
+  await page.goto('/?book=gatsby');
+  await ready(page);
+  const swallow = (route: Route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    return route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' }, body: '{}' });
+  };
+  await page.route('https://api.deepseek.com/chat/completions', swallow);
+  const d = await dropInBand(page, 0, 0);
+  await page.mouse.click(d.x, d.y);
+  await page.getByRole('button', { name: '填写 Key' }).click();
+  const card = page.getByRole('region', { name: 'AI 语法分析' });
+  await card.getByLabel('DeepSeek API Key').fill(key);
+  await card.getByRole('button', { name: '确认' }).click();
+  await expect(page.locator('.wd-miss')).toHaveText('DeepSeek 暂时不可用，请稍后再试');
+  await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
+  await page.unroute('https://api.deepseek.com/chat/completions', swallow);
 }
 
 /** Scrolls the end of sentence `s` of paragraph `p` (Gatsby, chapter 0) to the band centre; returns its droplet's centre. */

@@ -39,7 +39,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist
-          path: .
+          # The artifact holds dist's contents (upload-artifact drops the common `dist/` root).
+          path: dist
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 

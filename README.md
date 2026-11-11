@@ -4,11 +4,13 @@
 
 > **Night reading 2026-10-20:** `docs/handoff/2026-10-20/NIGHT_MODE_1c.md` (夜读 1c in the reader, 带读 auto guided reading). It lifts the night mode 1c / auto guided reading exclusion below; the owner's decisions are in `docs/plans/2026-10-20-night-guide.md` (the Home capsule stays the only switch, for the whole app; the layout does not change at night).
 
+> **Reading friction 2026-10-26:** `docs/handoff/2026-10-26/CHANGES.md`. Where it disagrees with the paragraphs below, it wins: ‹ 书架 stays visible, a blurred word scrolls into the band before its drawer opens, 带读 is available in 纸白, a footnote follows 保存 (predictions stay lighter and do not need 保存), paper fade stops at 0.45, and Home no longer holds the DeepSeek key or the beta log.
+
 ## Overview
 A focus-first English reader for Chinese-speaking learners. The MVP contains exactly two screens:
 
 1. **Home** — "continue reading" + a basic bookshelf, with import.
-2. **Reader (4a, paper-white)** — a fixed sharp "focus band" in the vertical centre of the screen, with lines blurring and fading by distance from it. Tapping any word tears the page open into a "drawer" with a definition. Every looked-up word then gets a 9px Chinese footnote under it throughout the book, with **zero change to line height**.
+2. **Reader (4a, paper-white)** — a fixed sharp "focus band" in the vertical centre of the screen, with lines blurring and fading by distance from it. Tapping a sharp word tears the page open into a "drawer" with a definition; a blurred word scrolls to the centre first, then opens. A 9px Chinese footnote appears under a word after 保存, and under a predicted word before any tap, with **zero change to line height**.
 
 Fully offline. No account, no network requests, no analytics SDK.
 
@@ -48,7 +50,7 @@ Top to bottom:
 - **Continue reading** (the whole block is tappable and opens the book):
   - Label `CONTINUE`: 11px, uppercase, .14em, 62%.
   - Title: Newsreader 36px, line-height 1.1, `#16150f`.
-  - Author · chapter: Noto Sans SC 12.5px, 62%.
+  - Author · chapter: Noto Sans SC 12.5px, 62%. The chapter is its title when the book has one, otherwise `第 N 章`.
   - Progress: 2px track (ink at 10%), `#c1452f` fill, then 11px/500 percentage on the right.
   - Below that: `还剩约 N 分钟`, 11px, 62%. N = remaining words ÷ 230.
 - **Shelf header**: `SHELF`, 11px, uppercase, .14em, 62%. On the right, `+ 导入` in `#c1452f`, 12px, with a 44px hit target.
@@ -56,7 +58,7 @@ Top to bottom:
 - **Shelf row** (min height 44px): 46 × 64 flat cover; title Newsreader 18px; author 11px 62%; 2px progress bar plus `第 N 章 · 还剩 M 分`. Finished books show a grey bar and the finish date.
   - Cover: use the EPUB cover image if there is one. Otherwise a solid colour chosen as `hash(title) % 8` from an 8-colour palette, with no texture.
   - Sort by `openedAt`, newest first.
-- **Empty state**: one line of copy, the import button, and the 3 bundled public-domain books listed.
+- **Empty state**: one line of copy, the import button, and the 3 bundled public-domain books, each with `从这本开始`. The vocabulary card stays under the shelf. The DeepSeek key is not on Home; it opens from a grammar droplet or the Agent drawer when a key is missing. The beta log export is the last row of the reader settings sheet.
 
 ### 2. Reader 4a (`ReaderView`)
 References: `design/screens/fig-4a-focus.png` and `fig-4a-drawer.png`.
@@ -75,12 +77,14 @@ References: `design/screens/fig-4a-focus.png` and `fig-4a-drawer.png`.
   - Fixed in screen coordinates (not document coordinates), centred vertically.
   - Height = viewport height × `focusPct` (default 30%, about 3 lines).
   - Lines inside the band are perfectly sharp. Formula in *Interactions*.
-- **Top bar (new)**:
-  - 44px tall: `‹ 书架` on the left, the book title in the middle.
-  - Appears only on a tap in the title area: the top of the page down to 22px below the eyebrow (章节名 · 进度), even on a word; also on a tap on blank space or at the page edge (side margins, gaps between paragraphs, after a short line, the faded bottom edge) that opens no drawer (owner request 2026-10-20). The same tap again hides it, and so does a tap on text, blurred or sharp (owner decisions 2026-10-15, 2026-10-20). Fades out after 3s idle or on scroll (220ms). Kept by the owner on 2026-10-14, although the handoff of that day removes it.
-- **Bottom toolbar (new)**:
-  - Floating capsule with two buttons: `目录` (table of contents, P1) and `Aa` (settings).
-  - Shown and hidden together with the top bar.
+- **Back**: `‹ 书架` stays visible and tappable, including while a sheet is open. It does not fade with the chrome.
+- **Top bar**:
+  - The book title in the centre. It appears with the capsule, not with the back button.
+  - A tap in the title area (the top of the page down to 22px below the eyebrow, even on a word), on blank space, or on the page edge shows or hides the title and the capsule (owner request 2026-10-20). The same tap again hides them, and so does a tap on text. They fade out after 3s idle or on scroll (220ms).
+- **Bottom toolbar**:
+  - Floating capsule with two buttons: `目录` and `Aa` (settings).
+  - Shown and hidden with the title, not with `‹ 书架`.
+- **带读**: the guide bar is mounted in both 纸白 and 夜读, and steps aside while the title and capsule are visible. The Home capsule remains the only theme switch. Switching to 纸白 pauses playback.
 
 **Word highlight while its drawer is open:** background `rgba(34,31,27,.09)`, radius 3px.
 
@@ -89,10 +93,10 @@ References: `design/screens/fig-4a-focus.png` and `fig-4a-drawer.png`.
 position:absolute; left:0; top:23px;
 font: 500 9px/1 'PingFang SC','Noto Sans SC','Hiragino Sans GB',sans-serif;
 letter-spacing:.04em; color:rgba(34,31,27,.6);
-white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
+white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:max(100%, 6em);
 pointer-events:none; -webkit-font-smoothing:antialiased;
 ```
-The footnote is out of normal flow, so line height must not change. Acceptance R-06: each line's y position is identical before and after a footnote appears.
+The footnote is out of normal flow, so line height must not change. A short word may show about six em of gloss past its own width. A predicted footnote uses the same size at about 0.38 ink; a saved word stays at 0.6. Acceptance R-06: each line's y position is identical before and after a footnote appears.
 
 **Tear-paper drawer** (`WordDrawer`). It is inserted as a sibling directly after the tapped line, with margin `5px -34px 7px` so it bleeds to the screen edges.
 - **Container**: `display:grid; grid-template-rows:0fr → 1fr` (keyframes `splitG` / `collapseG`); `overflow:hidden`; `padding:0 34px`.
@@ -137,7 +141,7 @@ The footnote is out of normal flow, so line height must not change. Acceptance R
 ### 3. Settings sheet (`SettingsSheet`, new)
 - Opened by `Aa` (a tap in the title area shows the toolbar with `Aa`). Rises from the bottom; closes on a tap outside (transparent scrim) or on the top handle. Uses the drawer's leather surface and the same 330 / 250ms motion.
 - Max height 42% of the viewport, so the focus band always stays visible above it.
-- Rows: 字号, **聚焦模糊** (`focusBlur`, default on; red switch, hint 关闭后整页清晰), 清晰带, 模糊强度, 预测生词, 整句模式 (the MVP sheet; owner restored it on 2026-10-15). Off → every line blur 0, opacity 1, the fade masks shrink to a thin strip behind the eyebrow, the whole page sharp; 清晰带 / 模糊强度 / 整句模式 greyed out.
+- Rows: 字号, **聚焦模糊** (`focusBlur`, default on; red switch, hint 关闭后整页清晰), 清晰带, 模糊强度, 预测生词, 整句模式, then 导出内测日志 (the MVP sheet; owner restored it on 2026-10-15). Off → every line blur 0, opacity 1, the fade masks shrink to a thin strip behind the eyebrow, the whole page sharp; 清晰带 / 模糊强度 / 整句模式 greyed out. Blur amount does not change the fade.
 - Changes apply live.
 
 | Item | Control | Default | Mapping |
@@ -163,7 +167,7 @@ ramp = max(1, H/2 - half)
 d    = |lineCenterY - viewportCenterY|
 t    = clamp((d - half) / ramp, 0, 1)
 blur    = blurMax * t              // blurMax default 7
-opacity = 1 - 0.85 * t
+opacity = 1 - 0.55 * t            // paper, 0.45 at the edge; night stays 1 - 0.92 * t (0.08 at t = 1)
 sentenceMode: t = min(1, t + 0.18) for lines outside the current sentence
 ```
 **Performance** (budget ≤ 4ms per frame, 60fps on mid-range devices, < 2% dropped frames):
@@ -176,7 +180,7 @@ sentenceMode: t = min(1, t + 0.18) for lines outside the current sentence
 ### Word tap (R-04, R-05)
 - Hit test: `caretRangeFromPoint` (or `caretPositionFromPoint`) finds the word boundaries and the sentence the word is in. The word is normalised with `/[^A-Za-z'’-]/g`.
 - Lemma: look up `forms → lemma`, fall back to simple rules (-s, -es, -ed, -ing, -ies→y), then use the surface form.
-- Lookup: in-memory LRU cache, then `dict.db`. Time from tap to drawer starting to open must be ≤ 100ms.
+- Lookup: in-memory LRU cache, then `dict.db`. Time from an in-band tap to the drawer starting to open must be ≤ 100ms. With 聚焦模糊 on, a word outside the sharp band scrolls to the vertical centre (from the line table, 600ms) and then opens; a touch or wheel during that scroll cancels it. With 聚焦模糊 off, every word below the title area opens immediately. A title-area tap never looks a word up.
 - Timing:
   - Open: 330ms (`splitG`). Content `riseIn` over 250ms, no delay.
   - Close: 250ms (`collapseG`). Content `fadeOut` over 138ms (= close × 0.55).
@@ -187,14 +191,14 @@ sentenceMode: t = min(1, t + 0.18) for lines outside the current sentence
 - While a drawer is open, the first scroll gesture is cancelled (`preventDefault`) and closes the drawer. For 250ms after closing, scrolling stays locked to avoid a jump.
 - **Tapping another word while one is open**: close first, then open the new one after the close duration. Tapping the same word just closes.
 - **On open**:
-  - Write a `Lookup` row.
-  - Add the lemma to `seen`.
+  - Write a `Lookup` row and update the vocabulary model. This does not add a footnote.
   - Fire one light haptic.
+- **保存** adds the lemma to the footnote set for this book and the button stays 已存. Closing without 保存 leaves no footnote. **撤回** forgets the lemma (rows, saved flag, footnotes).
 
 ### Footnotes (R-06)
-- On book open: `seen` = all distinct `lemma` values in `Lookup` for this `bookId`. Scope is **per book** (open decision; see the MVP doc §7).
-- Every word whose lemma is in `seen` gets a footnote.
-- Text = the first sense of `gloss` for that part of speech, truncated with an ellipsis to the word's width.
+- On book open: footnotes come from lemmas with `saved = 1` in this book, plus predicted lemmas. Scope is **per book**.
+- A predicted lemma that is not saved uses the lighter footnote. Saving it switches that footnote to the ordinary one.
+- Text = the first sense of `gloss` for that part of speech, ellipsized. A short word may extend to about 6em.
 - Only render footnotes for paragraphs currently mounted.
 
 ### Position and progress (R-07)
@@ -216,9 +220,9 @@ Meanwhile, load `Position`, mount the chapter and build the line table. Going ba
 1. A text selection exists → clear it.
 2. A drawer or the settings sheet is open → close it.
 3. The tap is in the title area (top of the page to 22px below the eyebrow) → toggle the top bar and bottom toolbar (even on a word; owner decision 2026-10-15).
-4. The tap hits a word → open the word drawer.
-5. Blank space or the page edge (no text under the tap, or the faded bottom edge) → toggle the top bar and bottom toolbar (owner request 2026-10-20).
-6. Otherwise (text, blurred or sharp) → hide the top bar and bottom toolbar if they are shown; nothing else.
+4. The tap hits a sharp word, or any word while 聚焦模糊 is off → open the word drawer. A blurred word scrolls to the centre, then opens.
+5. Blank space or the page edge (no text under the tap, or the faded bottom edge) → toggle the title and the capsule (owner request 2026-10-20). `‹ 书架` stays.
+6. Otherwise (text that opened nothing) → hide the title and the capsule if they are shown; nothing else.
 
 ---
 
@@ -226,7 +230,7 @@ Meanwhile, load `Position`, mount the chapter and build the line table. Going ba
 
 - **Reader**:
   - `pop: {word, lemma, lineIndex, caretX, phase: 'loading'|'ready'|'notfound'|'closing'} | null`
-  - `seen: Set<lemma>`
+  - `saved: Set<lemma>` (footnotes) and `predicted: Set<lemma>` (lighter footnotes)
   - `chromeVisible`
   - `settingsOpen`
   - `lineTable`

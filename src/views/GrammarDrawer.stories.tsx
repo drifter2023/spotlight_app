@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { fn, userEvent, within } from 'storybook/test';
+import type { Db } from '../core/db/types.ts';
 import type { Grammar } from '../core/grammar/parse.ts';
+import { memDb } from './_stories/fixtures.ts';
 import { Phone, ReaderPage } from './_stories/Phone.tsx';
 import { GrammarDrawer } from './WordDrawer.tsx';
 
@@ -38,7 +40,27 @@ export const Waiting: Story = { args: { run: { status: 'waiting' } } };
 export const Streaming: Story = {
   args: { run: { status: 'streaming', grammar: { translation: ANSWER.translation, pattern: ANSWER.pattern, points: ANSWER.points.slice(0, 1), pending: { kind: 'point', label: '现在完成进行时', text: 'I’ve been turning over 表示从过去' } } } },
 };
-export const NoKey: Story = { args: { run: { status: 'error', reason: 'no-key', partial: null } } };
+/** No key: the error stays honest and offers the key form, not 重试. */
+export const NoKey: Story = {
+  args: { run: { status: 'error', reason: 'no-key', partial: null } },
+  loaders: [async () => ({ db: await memDb() })],
+  render: (args, { loaded }) => (
+    <Phone>
+      <ReaderPage band={[0, 2]} gapAfter={2}>
+        <GrammarDrawer {...args} db={loaded.db as Db} />
+      </ReaderPage>
+    </Phone>
+  ),
+};
+export const EnteringKey: Story = {
+  ...NoKey,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(await c.findByRole('button', { name: '填写 Key' }));
+    await c.findByLabelText('DeepSeek API Key');
+    (document.activeElement as HTMLElement | null)?.blur();
+  },
+};
 /** A network failure after part of the answer arrived: the part stays, with 重试. */
 export const FailedHalfway: Story = {
   args: { run: { status: 'error', reason: 'network', partial: { translation: ANSWER.translation, pattern: '', points: [], pending: null } } },

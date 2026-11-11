@@ -8,11 +8,11 @@ import { dwellMs, Guide, GUIDE_STEP_MS, type GuideClock, type GuideHost, type Se
 import { nodeDb } from '../helpers/nodeDb.ts';
 
 describe('夜读 focus band (N3)', () => {
-  it('NM-02: night opacity reaches .08 at t = 1 (4a stays at .15); the night blur defaults to 9 px until the reader sets one', () => {
+  it('NM-02: night opacity reaches .08 at t = 1 (paper stays at .45); the night blur defaults to 9 px until the reader sets one', () => {
     expect(opacityFor(1, true)).toBeCloseTo(0.08, 3);
     expect(opacityFor(0, true)).toBe(1);
     expect(opacityFor(0.5, true)).toBe(0.54);
-    expect(opacityFor(1)).toBe(0.15);
+    expect(opacityFor(1)).toBe(0.45);
     const night = { ...DEFAULT_PREFS, theme: 'night' as const };
     expect(blurMaxFor(night)).toBe(NIGHT_BLUR_MAX);
     expect(NIGHT_BLUR_MAX).toBe(9);

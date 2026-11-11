@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { sseText } from '../helpers/sse.ts';
-import { fullTier, ready, wordInBand } from './helpers.ts';
+import { fullTier, ready, saveDeepSeekKey, wordInBand } from './helpers.ts';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -36,8 +36,9 @@ test('N-04: long-press selects a word, dragging extends it, handles adjust it, a
   await ready(page);
   const p = await wordInBand(page, 'advice');
 
-  // A short press is still a tap: the word drawer opens, nothing is selected.
-  await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(120); await page.mouse.up();
+  // A short press is still a tap: the word drawer opens, nothing is selected. (A click, not a timed
+  // 120 ms hold: on a loaded CI runner the release can be handled after the 380 ms long-press timer.)
+  await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId('drawer')).toHaveAttribute('data-state', 'ready');
   await page.mouse.click(12, 600);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
@@ -112,12 +113,7 @@ test('N-04: a long-press on blurred text selects nothing (owner decision 5c)', a
 test('N-06: 问旁注 opens the Agent drawer with the selection in 当前句\'s slot; it is asked about, quoted and then cleared; closing drops it', async ({ page }) => {
   await fullTier(page);
   const bodies = await fakeDeepSeek(page);
-  await page.goto('/');
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
-  await card.getByLabel('DeepSeek API Key').fill('sk-e2e-good');
-  await card.getByRole('button', { name: '确认' }).click();
-  await expect(card.locator('.ai-status')).toHaveText('已连接 ····good');
-  await page.waitForTimeout(600);
+  await saveDeepSeekKey(page);
 
   await page.goto('/?book=gatsby&dev=1');
   await ready(page);

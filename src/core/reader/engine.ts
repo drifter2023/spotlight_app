@@ -7,7 +7,7 @@ import { lineOffset, lineRange, renderLine, type Footnote } from './decorate.ts'
 import { bandFor, blurPx, opacityFor, tFor, withSentencePenalty } from './focus.ts';
 import type { GuideHost, SentenceId } from './guide.ts';
 import { ChapterLayout, type LineMeta } from './layout.ts';
-import { nearestWord, wordBounds, wordContext } from './words.ts';
+import { nearestWord, wordBounds, wordContext, words } from './words.ts';
 
 export interface EngineBook { id: string; wordCount: number; chapters: ChapterData[] }
 /** `words` is the book-level word index at the band centre, for session metrics. */
@@ -303,7 +303,7 @@ export class ReaderEngine implements GuideHost {
   }
 
   /**
-   * Re-runs the annotator over mounted paragraphs, e.g. after a new lookup joins `seen`. Paragraphs
+   * Re-runs the annotator over mounted paragraphs, e.g. after 保存 adds a lemma. Paragraphs
    * nearest the band go first; the rest follow in background slices, so no frame is blocked (R-01).
    */
   refreshAnnotations(): void {
@@ -321,41 +321,104 @@ export class ReaderEngine implements GuideHost {
     }
   }
 
-  /** Word under a viewport point, or null for blank space, punctuation or the chapter heading. */
+  /**
+   * Word under a viewport point, or null for blank space, punctuation or the chapter heading.
+   * A soft line is blurred and faded; with `content-visibility: auto` on its chapter the caret
+   * then hits the chapter box instead of the glyphs. That miss falls through to the line table
+   * (one scroller rect, then that one line's word ranges) — never per frame.
+   */
   hitTest(x: number, y: number): WordHit | null {
+    // The side margins are blank: they show or hide the menu, and never a word (owner request 2026-10-20).
+    const scrollerBox = this.#scroller.getBoundingClientRect();
+    if (x < scrollerBox.left + SIDE || x > scrollerBox.right - SIDE) return null;
+    const caret = this.#hitFromCaret(x, y);
+    return caret.onLine ? caret.hit : this.#hitFromLineTable(x, y);
+  }
+
+  /** The caret's word, and whether the point landed on a body line (punctuation stays a miss). */
+  #hitFromCaret(x: number, y: number): { onLine: boolean; hit: WordHit | null } {
     const { node, offset } = this.#caretAt(x, y);
     const el = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('.rd-line');
-    if (!node || !el || el.classList.contains('rd-head')) return null;
+    if (!node || !el || el.classList.contains('rd-head')) return { onLine: false, hit: null };
     const lineIndex = this.#index.get(el);
-    const line = lineIndex === undefined ? undefined : this.#lines[lineIndex];
-    if (!line || line.para < 0) return null;
+    if (lineIndex === undefined) return { onLine: false, hit: null };
+    const line = this.#lines[lineIndex];
+    if (!line || line.para < 0) return { onLine: false, hit: null };
     const p = this.#book.chapters[line.chapter]!.paras[line.para]!;
     const text = paragraphText(p);
     const lineText = el.firstChild ? this.#lineText(el) : '';
     const at = line.start + Math.min(lineOffset(el, node, offset), lineText.length);
     const b = wordBounds(text, at);
-    if (!b) return null;
+    if (!b) return { onLine: true, hit: null };
     const a = Math.max(b[0], line.start);
     const e = Math.min(b[1], line.start + lineText.length);
-    if (e <= a) return null;
+    if (e <= a) return { onLine: true, hit: null };
     const rect = lineRange(el, a - line.start, e - line.start).getBoundingClientRect();
     const box = el.getBoundingClientRect();
-    if (x < rect.left - 4 || x > rect.right + 4 || y < box.top || y > box.bottom) return null;
+    if (x < rect.left - 4 || x > rect.right + 4 || y < box.top || y > box.bottom) return { onLine: true, hit: null };
     const ctx = wordContext(p, b[0]);
     return {
-      chapter: line.chapter, para: line.para, start: b[0], end: b[1], word: text.slice(b[0], b[1]),
-      lineIndex, rect, ...ctx,
-    } as WordHit;
+      onLine: true,
+      hit: {
+        chapter: line.chapter, para: line.para, start: b[0], end: b[1], word: text.slice(b[0], b[1]),
+        lineIndex, rect, ...ctx,
+      },
+    };
   }
 
-  /** True if a tap on line `i` may open a drawer: any line with 聚焦模糊 off, else only the band (isInBand). */
+  /** The word on the line-table row under `y`, when the caret cannot see a soft line. */
+  #hitFromLineTable(x: number, y: number): WordHit | null {
+    if (!this.#lines.length) return null;
+    const scroller = this.#scroller;
+    const box = scroller.getBoundingClientRect();
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) return null;
+    const i = this.#lineAtY(y - box.top + scroller.scrollTop);
+    const line = this.#lines[i];
+    if (!line || line.para < 0 || !line.el.firstChild) return null;
+    const top = this.#gap && this.#gapLine >= 0 && i > this.#gapLine ? this.#top[i]! + this.#gap : this.#top[i]!;
+    const viewTop = box.top + top - scroller.scrollTop;
+    if (y < viewTop || y >= viewTop + this.#lh) return null;
+    const p = this.#book.chapters[line.chapter]!.paras[line.para]!;
+    const text = paragraphText(p);
+    const lineText = this.#lineText(line.el);
+    let best: WordHit | null = null;
+    let bestDx = Infinity;
+    let bestInside = false;
+    for (const w of words(lineText)) {
+      const bounds = wordBounds(text, line.start + w.start);
+      const a = bounds ? Math.max(bounds[0], line.start) : line.start + w.start;
+      const e = bounds ? Math.min(bounds[1], line.start + lineText.length) : line.start + w.end;
+      if (e <= a) continue;
+      const rect = lineRange(line.el, a - line.start, e - line.start).getBoundingClientRect();
+      if (y < rect.top || y > rect.bottom) continue;
+      const inside = x >= rect.left && x <= rect.right;
+      if (!inside && (x < rect.left - 4 || x > rect.right + 4)) continue;
+      const dx = Math.abs(x - (rect.left + rect.right) / 2);
+      if (best && ((bestInside && !inside) || (inside === bestInside && dx >= bestDx))) continue;
+      const start = bounds ? bounds[0] : a;
+      const end = bounds ? bounds[1] : e;
+      best = {
+        chapter: line.chapter, para: line.para, start, end, word: text.slice(start, end),
+        lineIndex: i, rect, ...wordContext(p, start),
+      };
+      bestDx = dx;
+      bestInside = inside;
+    }
+    return best;
+  }
+
+  /**
+   * True if a tap on line `i` may open a drawer at once: any line with 聚焦模糊 off, else only a
+   * sharp line (isInBand). A word on a soft line is scrolled to the centre first, then opened.
+   */
   isTappable(i: number): boolean {
     return !this.#prefs.focusBlur ? i >= 0 && i < this.#lines.length : this.isInBand(i);
   }
 
   /**
    * True while line `i` is sharp: inside the focus band (and, in sentence mode, in the current
-   * sentence). Only sharp lines open drawers; the blurred text around the band does not.
+   * sentence). Outside it, `tFor` of the line's centre is greater than 0, and the line is painted
+   * with blur and a lower opacity (sentence mode does that even inside the geometric band).
    */
   isInBand(i: number): boolean {
     const line = this.#lines[i];
@@ -640,6 +703,36 @@ export class ReaderEngine implements GuideHost {
       this.#scroller.scrollTop = from + (to - from) * ease(k);
       if (k < 1) { this.#anim = requestAnimationFrame(frame); return; }
       this.#anim = 0;
+      done();
+    };
+    this.#anim = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(this.#anim); this.#anim = 0; };
+  }
+
+  /**
+   * Scrolls line `i` so its vertical centre is the viewport centre, over `ms`, then calls `done`.
+   * The position comes from the line table (`#top`), never from a per-frame layout read. A new
+   * scroll cancels this one and does not call `done`. When `done` runs the line is centred, so it
+   * sits in the sharp band (or the scroll has finished, if the page cannot travel that far).
+   */
+  scrollLineToCentre(i: number, ms: number, done: () => void): () => void {
+    cancelAnimationFrame(this.#anim);
+    this.#anim = 0;
+    const line = this.#lines[i];
+    if (!line) {
+      this.#anim = requestAnimationFrame(() => { this.#anim = 0; done(); });
+      return () => { cancelAnimationFrame(this.#anim); this.#anim = 0; };
+    }
+    const top = this.#gap && this.#gapLine >= 0 && i > this.#gapLine ? this.#top[i]! + this.#gap : this.#top[i]!;
+    const from = this.#scroller.scrollTop;
+    const to = Math.max(0, top + this.#lh / 2 - this.#H / 2);
+    const t0 = performance.now();
+    const frame = (now: number): void => {
+      const k = ms > 0 ? Math.min(1, (now - t0) / ms) : 1;
+      this.#scroller.scrollTop = from + (to - from) * ease(k);
+      if (k < 1) { this.#anim = requestAnimationFrame(frame); return; }
+      this.#anim = 0;
+      this.paintNow();
       done();
     };
     this.#anim = requestAnimationFrame(frame);

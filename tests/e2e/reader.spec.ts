@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { fullTier, openFromHome, ready, tapTitle, wordInBand } from './helpers.ts';
 
 test('makes no network requests outside the app origin, through home, reading and lookup', async ({ page, baseURL }) => {
+  test.slow(!!process.env.CI, 'runs the first-launch probe, which is slow on a CI runner');
   const origin = new URL(baseURL!).origin;
   const foreign: string[] = [];
   page.on('request', (r) => {
@@ -16,12 +17,46 @@ test('makes no network requests outside the app origin, through home, reading an
   expect(foreign).toEqual([]);
 });
 
+test('a wide window keeps the reading column to a book measure; a phone stays full width', async ({ page }) => {
+  await fullTier(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/?book=gatsby');
+  await ready(page);
+  const wide = await page.evaluate(() => {
+    const column = document.querySelector('.rd-column')!.getBoundingClientRect();
+    const scroll = document.querySelector('.rd-scroll')!.getBoundingClientRect();
+    const pageBox = document.querySelector('.rd-page')!.getBoundingClientRect();
+    const line = document.querySelector<HTMLElement>('.rd-line[data-p]')!;
+    return {
+      column: Math.round(column.width),
+      scroll: Math.round(scroll.width),
+      page: Math.round(pageBox.width),
+      centered: Math.round(column.left) === Math.round(pageBox.width - column.right),
+      line: Math.round(line.getBoundingClientRect().width),
+    };
+  });
+  expect(wide.column).toBe(720);
+  expect(wide.scroll).toBe(720);
+  expect(wide.page).toBe(1600);
+  expect(wide.centered).toBe(true);
+  expect(wide.line).toBeLessThan(720 - 60); // inside the 34 px side padding
+
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.waitForTimeout(200);
+  const phone = await page.evaluate(() => Math.round(document.querySelector('.rd-column')!.getBoundingClientRect().width));
+  expect(phone).toBe(402);
+});
+
 test('opens The Great Gatsby with the chapter eyebrow and 1%', async ({ page }) => {
   await page.goto('/?book=gatsby');
   await ready(page);
   await expect(page.locator('.rd-eyebrow-chapter')).toHaveText('Chapter I');
   await expect(page.locator('.rd-eyebrow-pct')).toHaveText('1%');
-  await expect(page.locator('.rd-line[data-p="0"]').first()).toContainText('In my younger and more vulnerable years');
+  // Where the first line breaks depends on the platform's font rendering (Linux WebKit wraps "years"),
+  // so check the opening words and the paragraph, not the break.
+  await expect(page.locator('.rd-line[data-p="0"]').first()).toContainText('In my younger and more vulnerable');
+  const para0 = await page.locator('.rd-chapter[data-ch="0"] .rd-line[data-p="0"]').allTextContents();
+  expect(para0.join(' ').replace(/\s+/g, ' ')).toContain('In my younger and more vulnerable years my father gave me some advice');
 });
 
 test('R-07: a reload restores the same paragraph into the band', async ({ page }) => {
@@ -29,7 +64,8 @@ test('R-07: a reload restores the same paragraph into the band', async ({ page }
   await page.goto('/?book=gatsby&dev=1');
   await ready(page);
   await page.evaluate(() => { document.querySelector('.rd-scroll')!.scrollTop += 6000; });
-  await page.waitForTimeout(1800); // idle 180ms + save debounce 1000ms
+  // idle 180 ms + save debounce 1000 ms + IndexedDB write; a CI runner can take twice that.
+  await page.waitForTimeout(process.env.CI ? 3500 : 1800);
   const before = await page.evaluate(() => window.__spotlight!.engine.currentAnchor());
   await page.reload();
   await ready(page);
@@ -119,8 +155,9 @@ test('S-03: 聚焦模糊 off makes the whole page sharp, any word below the titl
   await expect(page.getByTestId('drawer')).toHaveAttribute('data-state', 'ready');
   await page.mouse.click(12, vp.height / 2);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
-  // The title area itself shows ‹ 书架 / 目录 / Aa, never a drawer.
-  await page.mouse.click(high.x, 64);
+  // The title area itself shows ‹ 书架 / 目录 / Aa, never a drawer. Tap its middle: at the left, the
+  // dev panel (&dev=1) reaches below y 64 on Linux WebKit, whose native select is taller.
+  await tapTitle(page);
   await expect(page.locator('.rd-top')).toHaveClass(/rd-chrome-on/);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
   await page.getByRole('button', { name: '阅读设置' }).click();
@@ -151,31 +188,39 @@ test('N-01: a tap in the title area, on blank space or the page edge shows and h
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
 
   // The side margin, anywhere down the page, and the bottom edge: a tap shows them, the next hides them (owner request 2026-10-20).
-  for (const [x, y] of [[12, 130], [12, vp.height / 2], [vp.width - 12, vp.height * 0.75], [vp.width / 2, vp.height - 12]] as const) {
+  // The bottom centre can be a soft word now: that tap scrolls it into the band and opens.
+  // The corner is still the page edge (and the side margin), so it shows and hides the menu.
+  for (const [x, y] of [[12, 130], [12, vp.height / 2], [vp.width - 12, vp.height * 0.75], [vp.width - 12, vp.height - 12]] as const) {
     await page.mouse.click(x, y);
     await expect(bar).toHaveClass(/rd-chrome-on/);
     await expect(page.locator('.rd-capsule')).toHaveClass(/rd-chrome-on/);
     await page.mouse.click(x, y);
     await expect(bar).not.toHaveClass(/rd-chrome-on/);
   }
-  // A blurred line is text: a tap there shows nothing, and only hides them when they are shown.
-  const blurred = await page.evaluate(() => {
+  // A blurred word does not show the menu. It scrolls into the band and opens; shown chrome only hides.
+  const blurredWord = () => page.evaluate(() => {
     const h = window.innerHeight;
     const line = [...document.querySelectorAll<HTMLElement>('.rd-line[data-p]')].find((l) => {
       const b = l.getBoundingClientRect();
-      return b.top > h * 0.6 && b.bottom < h - 160 && l.style.filter !== 'none' && (l.textContent ?? '').trim().length > 20;
+      return b.top > h * 0.62 && b.bottom < h - 160 && l.style.filter.startsWith('blur') && (l.textContent ?? '').trim().length > 20;
     })!;
     const b = line.getBoundingClientRect();
     return { x: b.left + 40, y: b.top + b.height / 2 };
   });
-  await page.mouse.click(blurred.x, blurred.y);
-  await page.waitForTimeout(250);
+  await page.mouse.click((await blurredWord()).x, (await blurredWord()).y);
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
+  await expect(page.getByTestId('drawer')).toBeVisible({ timeout: 4000 });
+  await page.mouse.click(12, vp.height / 2); // an open drawer only closes
   await expect(page.getByTestId('drawer')).toHaveCount(0);
+  await expect(bar).not.toHaveClass(/rd-chrome-on/);
   await page.mouse.click(12, vp.height / 2);
   await expect(bar).toHaveClass(/rd-chrome-on/);
-  await page.mouse.click(blurred.x, blurred.y);
+  const blurredAgain = await blurredWord();
+  await page.mouse.click(blurredAgain.x, blurredAgain.y);
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
+  await expect(page.getByTestId('drawer')).toBeVisible({ timeout: 4000 });
+  await page.mouse.click(12, vp.height / 2);
+  await expect(page.getByTestId('drawer')).toHaveCount(0);
   // A word in the band opens its drawer and hides them.
   await page.mouse.click(12, vp.height / 2);
   await expect(bar).toHaveClass(/rd-chrome-on/);

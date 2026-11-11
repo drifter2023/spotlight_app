@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { lightHaptic } from '../app/haptics.ts';
 import { loadDict } from '../app/dict.ts';
 import { footnoteAnnotator } from '../core/annot/footnotes.ts';
-import { forgetLemma, isSaved, recordLookup, seenLemmas, setSaved } from '../core/annot/lookups.ts';
+import { forgetLemma, isSaved, recordLookup, savedLemmas, seenLemmas, setSaved } from '../core/annot/lookups.ts';
 import type { Db } from '../core/db/types.ts';
 import type { DictService, LookupResult } from '../core/dict/service.ts';
 import { GrammarService, type GrammarRun, type RunState } from '../core/grammar/service.ts';
@@ -32,6 +32,8 @@ const SCROLL_LOCK_MS = MOTION.drawerClose;
 const KEEP_BOTTOM = 70;
 /** Beta metric: does the reader scroll again within 10 s of closing a drawer? */
 const RESCROLL_MS = 10000;
+/** A soft word scrolls to the viewport centre, then its drawer opens (same length as a 带读 step). */
+const REACH_MS = 600;
 
 export interface WordLookup {
   /** Call from the engine's onRelayout. */
@@ -57,13 +59,21 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const popRef = useRef<Pop | null>(null);
   const dictRef = useRef<DictService | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
+  /** Lemmas with `saved = 1` in this book. A footnote follows these, not every lookup. */
+  const savedRef = useRef<Set<string>>(new Set());
   const seenDirty = useRef(false);
-  /** Predicted words (M7): footnoted like `seen`, from the vocabulary model and this book's lemmas. */
+  /** Predicted lemmas (M7): footnoted without 保存, and drawn lighter than a saved word. */
   const predictedRef = useRef<Set<string>>(new Set());
   const modelRef = useRef<VocabModel | null>(null);
   const lemmasRef = useRef<Set<string> | null>(null);
   const lockUntil = useRef(0);
   const pending = useRef<Target | null>(null);
+  /** A word outside the sharp band, opened after the drawer that was in the way has closed. */
+  const pendingReach = useRef<WordHit | null>(null);
+  /** Cancels a scroll-then-open that has not opened yet. */
+  const reachCancel = useRef<((openIt: boolean) => void) | null>(null);
+  const beginReachRef = useRef<(hit: WordHit, tapAt?: number) => void>(() => {});
+  const cancelReach = () => { reachCancel.current?.(false); };
   /** The Lookup write in flight, so an undo can wait for the row it deletes. */
   const recording = useRef<Promise<void>>(Promise.resolve());
   const timers = useRef<number[]>([]);
@@ -76,30 +86,38 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const setPop = useCallback((p: Pop | null) => { popRef.current = p; setPopState(p); }, []);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
-  /** Looked-up and predicted words: both get footnotes (P-03). */
-  const footnoted = (): Set<string> => new Set([...seenRef.current, ...predictedRef.current]);
+  /** Saved lemmas and predicted words (P-03). A lookup alone is not a footnote; 保存 adds the lemma. Predictions do not require 保存. */
+  const footnoted = (): Set<string> => new Set([...savedRef.current, ...predictedRef.current]);
+  /** Unsaved lookups in this book. They are not force-footnoted; a difficulty prediction still shows, and 保存 adds the rest. */
+  const unsavedLookups = (): Set<string> => {
+    const out = new Set<string>();
+    for (const l of seenRef.current) if (!savedRef.current.has(l)) out.add(l);
+    return out;
+  };
   const applyFootnotes = () => {
-    if (dictRef.current) engine.current?.setAnnotator(footnoteAnnotator(dictRef.current, footnoted()));
+    const dict = dictRef.current;
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current));
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {
     const model = modelRef.current;
     const lemmas = lemmasRef.current;
     if (!model || !lemmas) return false;
-    const next = model.predict(lemmas, prefs.get().predict);
+    const next = model.predict(lemmas, prefs.get().predict, unsavedLookups());
     const prev = predictedRef.current;
     predictedRef.current = next;
     return next.size !== prev.size || [...next].some((l) => !prev.has(l));
   };
 
-  // Dictionary and `seen` load in the background; the reader is usable before they arrive. Predicted
-  // words follow once the vocabulary model is loaded and the book is scanned (in slices, P-08).
+  // Dictionary, lookups and saved lemmas load in the background; the reader is usable before they arrive.
+  // Footnotes follow saved lemmas. Predicted words follow once the model is loaded and the book is scanned (P-08).
   useEffect(() => {
     let live = true;
-    void Promise.all([loadDict(), seenLemmas(db, bookId)]).then(async ([dict, seen]) => {
+    void Promise.all([loadDict(), seenLemmas(db, bookId), savedLemmas(db, bookId)]).then(async ([dict, seen, saved]) => {
       if (!live) return;
       dictRef.current = dict;
-      seenRef.current = seen;
+      for (const l of seen) seenRef.current.add(l);
+      for (const l of saved) savedRef.current.add(l);
       applyFootnotes();
       const [model, lemmas] = await Promise.all([VocabModel.load(db, dict), bookLemmas(bookId, book.chapters, dict)]);
       if (!live) return;
@@ -115,6 +133,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return () => {
       live = false;
       offPrefs();
+      cancelReach();
       void modelRef.current?.flush();
       for (const t of timers.current) clearTimeout(t);
       unfollow.current?.();
@@ -151,7 +170,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return { state: 'ready', result: r, predicted: predictedRef.current.has(r.lemma) && !seenRef.current.has(r.lemma) };
   };
 
-  /** Side effects of a successful lookup: Lookup row, `seen`, saved state (README → On open). */
+  /** A lookup writes a row, trains the model and logs the metric. The footnote waits for 保存. */
   const record = (p: Pop) => {
     const r = p.result;
     if (!r || p.target.kind !== 'word') return;
@@ -159,9 +178,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const predicted = p.predicted;
     if (!seenRef.current.has(r.lemma)) {
       seenRef.current.add(r.lemma);
-      seenDirty.current = true;
       const model = modelRef.current;
-      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; });
+      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; refreshFootnotes(); });
     }
     void logMetric(db, { type: 'lookup', bookId, predicted });
     recording.current = (async () => {
@@ -172,12 +190,17 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       const cur = popRef.current;
       if (cur?.target === p.target && cur.saved) await setSaved(db, id, true); // Save tapped before the row existed
       const saved = await isSaved(db, bookId, r.lemma);
+      if (saved && !savedRef.current.has(r.lemma)) {
+        savedRef.current.add(r.lemma);
+        seenDirty.current = true;
+        refreshFootnotes();
+      }
       const now = popRef.current;
       if (now?.target === p.target && !now.closing) setPop({ ...now, lookupId: id, saved: saved || now.saved });
     })();
   };
 
-  /** A newly seen lemma gets its footnote everywhere, including under the open word (fig-4a-drawer). */
+  /** A newly saved lemma gets its footnote everywhere, including under the open word. */
   const refreshFootnotes = () => {
     if (!seenDirty.current || !dictRef.current) return;
     seenDirty.current = false;
@@ -204,7 +227,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     }
     const word = target.hit;
     e.setHighlight(word);
-    const p: Pop = { ...base, ...resolve(word) };
+    const resolved = resolve(word);
+    const p: Pop = { ...base, ...resolved, saved: !!resolved.result && savedRef.current.has(resolved.result.lemma) };
     setPop(p);
     if (tapAt !== undefined) {
       requestAnimationFrame(() => { window.__spotlightTapMs = performance.now() - tapAt; });
@@ -215,7 +239,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
         dictRef.current ??= dict; // this can run before the load effect's own callback sets it
         const cur = popRef.current;
         if (cur?.target !== target || cur.closing) return;
-        const next = { ...cur, ...resolve(word) };
+        const resolved = resolve(word);
+        const next = { ...cur, ...resolved, saved: cur.saved || (!!resolved.result && savedRef.current.has(resolved.result.lemma)) };
         setPop(next);
         if (next.state === 'ready') record(next);
       }).catch(() => {
@@ -284,7 +309,10 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       refreshFootnotes();
       const next = pending.current;
       pending.current = null;
+      const reach = pendingReach.current;
+      pendingReach.current = null;
       if (next) open(next);
+      else if (reach) beginReachRef.current(reach);
     }, MOTION.drawerClose);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setPop]);
@@ -327,6 +355,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
 
   /** A relayout (font size, rotation) dropped the lines the drawer was attached to. */
   const reset = () => {
+    cancelReach();
+    pendingReach.current = null;
     unfollow.current?.();
     pending.current = null;
     engine.current?.setHighlight(null);
@@ -334,18 +364,23 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   };
 
   /**
-   * A tap right on a word's glyphs opens the word; otherwise a droplet within reach opens its
-   * sentence. Only sharp text opens anything (the focus band, or every line with 聚焦模糊 off);
-   * blurred text is blank space.
+   * A tap on a sharp word's glyphs opens the word; otherwise a droplet within reach opens its
+   * sentence. Sharp means the focus band, or every line while 聚焦模糊 is off. A word on a soft
+   * line (t > 0, or painted with blur / a lower opacity) is `reach`: scroll it to the centre, then open.
    */
-  const targetAt = (e: ReaderEngine, x: number, y: number): Target | null => {
+  const resolveTap = (e: ReaderEngine, x: number, y: number): { target: Target | null; reach: WordHit | null } => {
     const tapped = e.hitTest(x, y);
-    const word = tapped && e.isTappable(tapped.lineIndex) ? tapped : null;
-    const r = word?.rect;
-    const onGlyphs = r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-    const drop = onGlyphs ? null : e.dropAt(x, y);
-    if (drop) return { kind: 'sentence', hit: drop };
-    return word ? { kind: 'word', hit: word } : null;
+    const sharp = tapped && e.isTappable(tapped.lineIndex) ? tapped : null;
+    const r = sharp?.rect;
+    const onSharpGlyphs = !!(r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+    if (tapped && !sharp) {
+      const g = tapped.rect;
+      if (x >= g.left && x <= g.right && y >= g.top && y <= g.bottom) return { target: null, reach: tapped };
+    }
+    const drop = onSharpGlyphs ? null : e.dropAt(x, y);
+    if (drop) return { target: { kind: 'sentence', hit: drop }, reach: null };
+    if (sharp) return { target: { kind: 'word', hit: sharp }, reach: null };
+    return { target: null, reach: null };
   };
 
   const sameTarget = (a: Target, b: Target): boolean => {
@@ -353,26 +388,76 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return a.kind === 'word' ? a.hit.start === (b.hit as WordHit).start : a.hit.sentence === (b.hit as SentenceHit).sentence;
   };
 
+  /** Scroll `hit`'s line to the viewport centre, then open it. A touch or wheel before then cancels. */
+  const beginReach = (hit: WordHit, tapAt?: number) => {
+    const e = engine.current;
+    if (!e) return;
+    cancelReach();
+    const scroller = e.scroller;
+    let stopScroll = () => {};
+    let onUser = () => {};
+    const finish = (openIt: boolean) => {
+      if (reachCancel.current !== finish) return;
+      reachCancel.current = null;
+      scroller.removeEventListener('pointerdown', onUser);
+      scroller.removeEventListener('wheel', onUser);
+      stopScroll();
+      if (!openIt) return;
+      const now = engine.current;
+      if (!now) return;
+      const box = now.scroller.getBoundingClientRect();
+      const x = hit.rect.left + hit.rect.width / 2;
+      const fresh = now.hitTest(x, box.top + box.height / 2);
+      const same = fresh && fresh.chapter === hit.chapter && fresh.para === hit.para && fresh.start === hit.start;
+      open({ kind: 'word', hit: same ? fresh : hit }, tapAt);
+    };
+    onUser = () => finish(false);
+    scroller.addEventListener('pointerdown', onUser);
+    scroller.addEventListener('wheel', onUser, { passive: true });
+    reachCancel.current = finish;
+    stopScroll = e.scrollLineToCentre(hit.lineIndex, REACH_MS, () => finish(true));
+  };
+  beginReachRef.current = beginReach;
+
   const onTap = (x: number, y: number, timeStamp: number, closeOnly = false): boolean => {
     const e = engine.current;
     if (!e) return false;
+    cancelReach();
+    pendingReach.current = null;
     const p = popRef.current;
-    const target = closeOnly ? null : targetAt(e, x, y);
+    const { target, reach } = closeOnly ? { target: null, reach: null } : resolveTap(e, x, y);
     if (p) {
-      if (p.closing) { if (target) pending.current = target; return true; }
-      if (target && !sameTarget(target, p.target)) pending.current = target; // close first, then open after the close duration
+      if (p.closing) {
+        if (target) { pending.current = target; pendingReach.current = null; }
+        else if (reach) { pending.current = null; pendingReach.current = reach; }
+        return true;
+      }
+      if (target && !sameTarget(target, p.target)) { pending.current = target; pendingReach.current = null; } // close first, then open after the close duration
+      else if (!target && reach) { pending.current = null; pendingReach.current = reach; }
       close();
       return true;
     }
-    if (!target) return false;
-    open(target, timeStamp);
-    return true;
+    if (target) {
+      open(target, timeStamp);
+      return true;
+    }
+    if (reach) {
+      beginReach(reach, timeStamp);
+      return true;
+    }
+    return false;
   };
 
   const save = () => {
     const p = popRef.current;
     if (!p || p.state !== 'ready') return;
+    const lemma = p.result?.lemma;
     setPop({ ...p, saved: true });
+    if (lemma && !savedRef.current.has(lemma)) {
+      savedRef.current.add(lemma);
+      seenDirty.current = true;
+      refreshFootnotes();
+    }
     if (p.lookupId !== null) void setSaved(db, p.lookupId, true);
   };
 
@@ -385,6 +470,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const lemma = p?.result?.lemma;
     if (!p || p.closing || !lemma) return;
     if (seenRef.current.delete(lemma)) seenDirty.current = true;
+    if (savedRef.current.delete(lemma)) seenDirty.current = true;
     if (predictedRef.current.delete(lemma)) seenDirty.current = true;
     void logMetric(db, { type: 'undo', bookId, predicted: p.predicted });
     close();
@@ -399,7 +485,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const drawer = pop
     ? createPortal(
       pop.target.kind === 'sentence'
-        ? <GrammarDrawer closing={pop.closing} run={pop.runState!} x={pop.x} onRetry={() => pop.run?.retry()} />
+        ? <GrammarDrawer closing={pop.closing} run={pop.runState!} x={pop.x} db={db} onRetry={() => pop.run?.retry()} />
         : <WordDrawer state={pop.state} closing={pop.closing} result={pop.result} x={pop.x} saved={pop.saved} onSave={save} onUndo={undo} />,
       pop.host,
     )

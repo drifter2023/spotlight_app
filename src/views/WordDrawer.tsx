@@ -1,8 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LookupResult } from '../core/dict/service.ts';
 import { FAILURE, NO_RETRY } from '../core/ai/failure.ts';
+import type { AiErrorKind } from '../core/ai/deepseek.ts';
+import type { Db } from '../core/db/types.ts';
 import type { Grammar, Pending } from '../core/grammar/parse.ts';
 import type { RunState } from '../core/grammar/service.ts';
+import { AiKeyCard } from './home/AiKeyCard.tsx';
 
 export type DrawerState = 'loading' | 'ready' | 'notfound';
 
@@ -38,7 +41,12 @@ function useInnerScroll(follow: boolean) {
       mark();
     };
     const onGrow = () => {
-      if (followRef.current && stick) el.scrollTop = el.scrollHeight;
+      if (followRef.current && stick) {
+        el.scrollTop = el.scrollHeight;
+        // Our jump and a reader's scroll up in the same frame give one scroll event; measured from
+        // where we jumped to, that event still reads as an upward scroll and lets go.
+        lastTop = el.scrollTop;
+      }
       mark();
     };
     const ro = new ResizeObserver(onGrow);
@@ -159,8 +167,18 @@ function GrammarBody({ grammar, pending }: { grammar: Grammar; pending: Pending 
   );
 }
 
+/** A missing or rejected key cannot be retried; the reader fills one in here instead. */
+function needsKey(reason: AiErrorKind): boolean {
+  return reason === 'no-key' || reason === 'invalid-key';
+}
+
 /** The grammar drawer opened from a sentence's droplet: dots, then the answer as it streams (G-02). */
-export function GrammarDrawer({ closing, run, x, onRetry }: { closing: boolean; run: RunState; x: number; onRetry: () => void }) {
+export function GrammarDrawer({ closing, run, x, onRetry, db }: {
+  closing: boolean; run: RunState; x: number; onRetry: () => void; db?: Db;
+}) {
+  const [keyOpen, setKeyOpen] = useState(false);
+  useEffect(() => { if (run.status !== 'error') setKeyOpen(false); }, [run.status]);
+  const keyReason = run.status === 'error' && needsKey(run.reason) ? run.reason : null;
   return (
     <DrawerFrame kind="sentence" state={DATA_STATE[run.status]} closing={closing} x={x} follow={run.status === 'streaming'}>
       <div className="wd-eyebrow">语法</div>
@@ -179,7 +197,15 @@ export function GrammarDrawer({ closing, run, x, onRetry }: { closing: boolean; 
             {!NO_RETRY.has(run.reason) && (
               <button type="button" className="wd-undo" onClick={(e) => { e.stopPropagation(); onRetry(); }}>重试</button>
             )}
+            {keyReason && db && !keyOpen && (
+              <button type="button" className="wd-undo" onClick={(e) => { e.stopPropagation(); setKeyOpen(true); }}>
+                {keyReason === 'no-key' ? '填写 Key' : '更换 Key'}
+              </button>
+            )}
           </div>
+          {keyReason && db && keyOpen && (
+            <AiKeyCard db={db} place="leather" initiallyEditing={keyReason === 'invalid-key'} onSaved={onRetry} />
+          )}
         </>
       )}
     </DrawerFrame>

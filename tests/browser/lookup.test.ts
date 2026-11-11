@@ -61,19 +61,67 @@ describe('footnotes (R-06)', () => {
   it('every line keeps its y position and height when footnotes appear', async () => {
     const { el, e } = await open();
     const before = tops(el);
+    const gloss = '一条很长的中文注释用来超出词宽';
     e.setAnnotator((_c, _p, _para, text) => {
       const out: Footnote[] = [];
-      for (const w of words(text)) if (w.word === 'river' || w.word === 'soldiers' || w.word === 'the') out.push({ start: w.start, end: w.end, text: '河流' });
+      for (const w of words(text)) {
+        if (w.word === 'of' || w.word === 'the' || w.word === 'river' || w.word === 'soldiers' || w.word === 'mountains') {
+          out.push({ start: w.start, end: w.end, text: gloss });
+        }
+      }
       return out;
     });
-    const notes = el.querySelectorAll('.rd-fn');
-    expect(notes.length).toBeGreaterThan(50);
+    // setAnnotator decorates the paragraphs nearest the band in a 5 ms slice now and the rest in
+    // background slices (R-01), so a slow machine may not reach 50 notes before the first await.
+    await expect.poll(() => el.querySelectorAll('.rd-fn').length).toBeGreaterThan(50);
+    const notes = [...el.querySelectorAll<HTMLElement>('.rd-fn')];
     expect(tops(el)).toEqual(before);
-    // and the footnote really sits under its word, inside the word's width
-    const fn = notes[0] as HTMLElement;
-    const w = fn.parentElement!.getBoundingClientRect();
-    expect(fn.getBoundingClientRect().top).toBeGreaterThan(w.top);
-    expect(fn.getBoundingClientRect().width).toBeLessThanOrEqual(w.width + 0.5);
+    // The gloss may extend past a short word (about six em) and still clips to a long word.
+    // Either way it sits under the word, and the line's y and height stay put (above).
+    const em6 = parseFloat(getComputedStyle(notes[0]!).fontSize) * 6;
+    let sawShort = false;
+    let sawLong = false;
+    for (const fn of notes) {
+      const word = fn.parentElement!.getBoundingClientRect();
+      const box = fn.getBoundingClientRect();
+      const cap = Math.max(word.width, em6);
+      expect(box.top).toBeGreaterThan(word.top);
+      expect(box.width).toBeLessThanOrEqual(cap + 1);
+      expect(box.width).toBeGreaterThan(cap - 2);
+      if (word.width + 1 < em6) {
+        sawShort = true;
+        expect(box.width).toBeGreaterThan(word.width + 1);
+      }
+      if (word.width > em6 + 1) {
+        sawLong = true;
+        expect(box.width).toBeLessThanOrEqual(word.width + 0.5);
+      }
+    }
+    expect(sawShort).toBe(true);
+    expect(sawLong).toBe(true);
+  });
+
+  it('marks a predicted gloss and leaves a looked-up gloss plain', async () => {
+    const { el, e } = await open();
+    e.setAnnotator((_c, _p, _para, text) => {
+      const out: Footnote[] = [];
+      for (const w of words(text)) {
+        if (w.word === 'river') out.push({ start: w.start, end: w.end, text: '河', kind: 'predicted' });
+        else if (w.word === 'the') out.push({ start: w.start, end: w.end, text: '这' });
+      }
+      return out;
+    });
+    const predicted = el.querySelector<HTMLElement>('.rd-fn-predicted');
+    const plain = [...el.querySelectorAll<HTMLElement>('.rd-fn')].find((n) => !n.classList.contains('rd-fn-predicted'));
+    expect(predicted?.textContent).toBe('河');
+    expect(predicted?.classList.contains('rd-fn')).toBe(true);
+    expect(plain?.textContent).toBe('这');
+    const predictedStyle = getComputedStyle(predicted!);
+    const plainStyle = getComputedStyle(plain!);
+    expect(predictedStyle.fontSize).toBe(plainStyle.fontSize);
+    expect(predictedStyle.position).toBe('absolute');
+    expect(predictedStyle.pointerEvents).toBe('none');
+    expect(predictedStyle.color).not.toBe(plainStyle.color);
   });
 
   it('keeps hit testing correct on decorated lines', async () => {
@@ -92,8 +140,10 @@ describe('footnotes (R-06)', () => {
   it('removing all footnotes restores plain lines', async () => {
     const { el, e } = await open();
     e.setAnnotator((_c, _p, _para, text) => [...words(text)].map((w) => ({ start: w.start, end: w.end, text: '注' })));
+    expect(el.querySelectorAll('.rd-w').length).toBeGreaterThan(0); // the first slice runs at once
     e.setAnnotator(null);
-    expect(el.querySelectorAll('.rd-w').length).toBe(0);
+    // Undecorating is sliced too (5 ms now, the rest in the background), so wait for it to finish.
+    await expect.poll(() => el.querySelectorAll('.rd-w').length).toBe(0);
   });
 });
 

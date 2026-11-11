@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { sseText } from '../helpers/sse.ts';
-import { dropInBand, fullTier, ready } from './helpers.ts';
+import { dropInBand, fullTier, ready, saveDeepSeekKey } from './helpers.ts';
 
 // With the offline service worker registered, page.route misses the page's requests (they would reach the real API).
 test.use({ serviceWorkers: 'block' });
@@ -20,10 +20,14 @@ async function fakeModels(page: Page) {
   return seen;
 }
 
-test('G-01: the Home key card checks a key before saving it, masks it, and clears it', async ({ page }) => {
+test('G-01: the key form checks a key before saving it, and the saved key survives a reload', async ({ page }) => {
   await fullTier(page);
   const seen = await fakeModels(page);
-  await page.goto('/');
+  await page.goto('/?book=gatsby');
+  await ready(page);
+  const d = await dropInBand(page, 0, 0);
+  await page.mouse.click(d.x, d.y);
+  await page.getByRole('button', { name: '填写 Key' }).click();
   const card = page.getByRole('region', { name: 'AI 语法分析' });
   await expect(card.locator('.ai-status')).toHaveText('未设置');
 
@@ -31,27 +35,31 @@ test('G-01: the Home key card checks a key before saving it, masks it, and clear
   await expect(input).toHaveAttribute('type', 'password');
   await card.getByRole('button', { name: '确认' }).click();
   await expect(card.locator('.ai-note')).toHaveText('请先填写 API Key');
+  expect(seen).toEqual([]);
 
   await input.fill('sk-wrong');
   await card.getByRole('button', { name: '确认' }).click();
   await expect(card.locator('.ai-note')).toHaveText('Key 无效，请检查后重新填写');
   await expect(card.locator('.ai-status')).toHaveText('未设置');
+  expect(seen).toEqual(['GET /models']);
 
   await input.fill('sk-0123456789-good');
   await card.getByRole('button', { name: '显示' }).click();
   await expect(input).toHaveAttribute('type', 'text');
   await card.getByRole('button', { name: '确认' }).click();
-  await expect(card.locator('.ai-status')).toHaveText('已连接 ····good');
-  await expect(card.getByLabel('DeepSeek API Key')).toHaveCount(0);
-  expect(seen).toEqual(['GET /models', 'GET /models']);
+  await expect.poll(() => seen.includes('POST /chat/completions')).toBe(true);
+  expect(seen.filter((s) => s.startsWith('GET'))).toEqual(['GET /models', 'GET /models']);
+  expect(seen.indexOf('POST /chat/completions')).toBeGreaterThan(seen.lastIndexOf('GET /models'));
+  expect(await page.content()).not.toContain('sk-0123456789-good');
 
   await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
   await page.reload();
-  await expect(card.locator('.ai-status')).toHaveText('已连接 ····good');
+  await ready(page);
+  const again = await dropInBand(page, 0, 0);
+  await page.mouse.click(again.x, again.y);
+  await expect(drawer(page)).not.toHaveAttribute('data-state', 'loading');
+  await expect(page.getByRole('button', { name: '填写 Key' })).toHaveCount(0);
   expect(await page.content()).not.toContain('sk-0123456789-good');
-
-  await card.getByRole('button', { name: '清除' }).click();
-  await expect(card.locator('.ai-status')).toHaveText('未设置');
 });
 
 const ANSWER = ['译文：在我年纪还轻、阅历尚浅的那些年里，父亲给过我一句忠告。\n句型：主句 + 定语从句\n主干｜my father gave me', ' some advice，give 带双宾语\n定语从句｜that I’ve been turning over 修饰 advice\n', '时态｜现在完成进行时：一直琢磨至今\n'];
@@ -72,12 +80,7 @@ async function fakeDeepSeek(page: Page, chat?: (route: Route) => Promise<void>) 
 }
 
 async function withKey(page: Page) {
-  await page.goto('/');
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
-  await card.getByLabel('DeepSeek API Key').fill('sk-e2e-good');
-  await card.getByRole('button', { name: '确认' }).click();
-  await expect(card.locator('.ai-status')).toHaveText('已连接 ····good');
-  await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
+  await saveDeepSeekKey(page);
 }
 
 const drawer = (page: Page) => page.getByTestId('drawer');
@@ -156,16 +159,20 @@ test('G-04: a long analysis is capped and scrolls inside the drawer; only a tap 
   await expect(drawer(page)).toHaveCount(0);
 });
 
-test('G-05: without a key the drawer says where to add one, and asks nothing', async ({ page }) => {
+test('G-05: without a key the drawer says so and asks nothing until a key is confirmed', async ({ page }) => {
   await fullTier(page);
   const bodies = await fakeDeepSeek(page);
   await page.goto('/?book=gatsby');
   await ready(page);
   const d = await dropInBand(page, 0, 0);
   await page.mouse.click(d.x, d.y);
-  await expect(page.locator('.wd-miss')).toHaveText('先在首页填写 DeepSeek API Key');
+  await expect(page.locator('.wd-miss')).toHaveText('还没有 DeepSeek API Key');
   await expect(drawer(page).getByRole('button', { name: '重试' })).toHaveCount(0);
+  await drawer(page).getByRole('button', { name: '填写 Key' }).click();
+  await drawer(page).getByLabel('DeepSeek API Key').fill('sk-e2e-good');
   expect(bodies).toHaveLength(0);
+  await drawer(page).getByRole('button', { name: '确认' }).click();
+  await expect.poll(() => bodies.length).toBe(1);
 });
 
 test('G-05: a server error offers 重试, which then succeeds', async ({ page }) => {

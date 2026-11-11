@@ -26,9 +26,9 @@ describe('R-01 focus band formula', () => {
     expect(blurPx(0.55, 7)).toBe(4);
     expect(blurPx(1, 7)).toBe(7);
   });
-  it('opacity is 1 - 0.85t rounded to 0.01', () => {
+  it('opacity is 1 - 0.55t rounded to 0.01', () => {
     expect(opacityFor(0)).toBe(1);
-    expect(opacityFor(0.2)).toBe(0.83);
-    expect(opacityFor(1)).toBe(0.15);
+    expect(opacityFor(0.2)).toBe(0.89);
+    expect(opacityFor(1)).toBe(0.45);
   });
 });

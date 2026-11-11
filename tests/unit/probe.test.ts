@@ -12,4 +12,8 @@ describe('probe decisions (R-01)', () => {
     expect(decideTier({ frames: 100, dropped: 0, ratio: 0, avgPaintMs: 4.5 })).toBe('fallback');
   });
   it('treats an empty run as a failure', () => expect(decideTier(summarise([], []))).toBe('fallback'));
+  it('gives the fallback tier when the time budget ran out before all frames were measured', () => {
+    expect(decideTier({ frames: 40, dropped: 0, ratio: 0, avgPaintMs: 2, complete: false })).toBe('fallback');
+    expect(decideTier({ frames: 120, dropped: 0, ratio: 0, avgPaintMs: 2, complete: true })).toBe('full');
+  });
 });
