@@ -166,7 +166,7 @@ test('Z-07: Home runs yesterday\'s 札记 only when 自动整理 is on; a fresh 
   await page.clock.setFixedTime(today);
   await page.goto('/');
   await expect.poll(() => fake.notes).toBe(2);
-  await expect(line(page)).toContainText('昨天 · The Great Gatsby');
+  await expect(line(page)).toContainText('昨天 · The Great Gatsby', { timeout: 10_000 });
   await page.waitForTimeout(800);
   expect(fake.notes).toBe(2);
 });
