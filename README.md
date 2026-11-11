@@ -14,7 +14,7 @@ A focus-first English reader for Chinese-speaking learners. The MVP contains exa
 
 Fully offline. No account, no network requests, no analytics SDK.
 
-**Out of scope (do not build):** tabs 书房 / 生词 / 我 and the bottom tab bar; today stats and streak; review word cards and spaced repetition; ~~night mode 1c and auto guided reading~~ (in scope since 2026-10-20, see above); pronunciation / TTS; the Examples button; the archivist agent / LLM; sync, push, accounts; theme editing; the long-press sentence translation that exists in the prototype.
+**Out of scope (do not build):** tabs 书房 / 生词 / 我 and the bottom tab bar; today stats and streak; review word cards and spaced repetition; ~~night mode 1c and auto guided reading~~ (in scope since 2026-10-20, see above); pronunciation / TTS; the Examples button; the archivist agent / LLM (except the DeepSeek uses listed in `CLAUDE.md` → Scope guard, including the 札记 summary of M13); sync, push, accounts; theme editing; the long-press sentence translation that exists in the prototype.
 
 ## About the design files
 Everything in `design/` is a **design reference built in HTML**. It shows the intended look and behaviour; it is not production code. Recreate it in a real app. The recommended stack, since no codebase exists yet, is:
@@ -53,12 +53,13 @@ Top to bottom:
   - Author · chapter: Noto Sans SC 12.5px, 62%. The chapter is its title when the book has one, otherwise `第 N 章`.
   - Progress: 2px track (ink at 10%), `#c1452f` fill, then 11px/500 percentage on the right.
   - Below that: `还剩约 N 分钟`, 11px, 62%. N = remaining words ÷ 230.
+- **札记 line** (M13, `docs/plans/2026-11-11-zhaji.md` §3.3): under the continue block's rule, only once a conversation with 旁注 or a 札记 exists. One button, min height 64 px, eyebrow `札记`, one line of text, `›` or an accent action word on the right; no number. States, first match wins: 正在整理…; an unread entry (昨天 · *title* and its first 要点); a closed day not yet summarised (昨天的对话还没整理 · 整理); only today pending (今天的对话 · 整理); otherwise 札记 ›. It opens the 札记 page (札记 journal · 对话 list of all conversations, swipe to delete, 自动整理 switch at the end).
 - **Shelf header**: `SHELF`, 11px, uppercase, .14em, 62%. On the right, `+ 导入` in `#c1452f`, 12px, with a 44px hit target.
 - **Filter**: `在读 / 读完`. Selected: 12.5px ink with a 2px `#c1452f` underline. Unselected: 62%. The row sits on a 1px rule. (`想读` is P1.)
 - **Shelf row** (min height 44px): 46 × 64 flat cover; title Newsreader 18px; author 11px 62%; 2px progress bar plus `第 N 章 · 还剩 M 分`. Finished books show a grey bar and the finish date.
   - Cover: use the EPUB cover image if there is one. Otherwise a solid colour chosen as `hash(title) % 8` from an 8-colour palette, with no texture.
   - Sort by `openedAt`, newest first.
-- **Empty state**: one line of copy, the import button, and the 3 bundled public-domain books, each with `从这本开始`. The vocabulary card stays under the shelf. The DeepSeek key is not on Home; it opens from a grammar droplet or the Agent drawer when a key is missing. The beta log export is the last row of the reader settings sheet.
+- **Empty state**: one line of copy, the import button, and the 3 bundled public-domain books, each with `从这本开始`. The vocabulary card stays under the shelf. The DeepSeek key is not on Home; it opens from a grammar droplet, the Agent drawer or the 札记 page when a key is missing. The beta log export is the last row of the reader settings sheet.
 
 ### 2. Reader 4a (`ReaderView`)
 References: `design/screens/fig-4a-focus.png` and `fig-4a-drawer.png`.
@@ -248,8 +249,12 @@ Book     (id, title, author, cover, color, format, wordCount, status['reading'|'
 Chapter  (bookId, idx, title, paras JSON[[sentence...]...], wordStart)
 Position (bookId PK, chapter, para, sentence, updatedAt)
 Lookup   (id, bookId, surface, lemma, zh, phonetic, sentence, loc, at, saved BOOL)
-Settings (key PK, value)         -- fontSize, focusPct, blurMax, sentenceMode, tier
+Settings (key PK, value)         -- fontSize, focusPct, blurMax, sentenceMode, tier; notes.auto ('on'|'off'), notes.autoFailedAt (ms)
+AgentMessage (+ loc JSON {chapter, para, sentence} on user rows, v8; NULL on older rows)
+NoteEntry (id, bookId, day 'YYYY-MM-DD' (04:00 boundary), status['done'|'empty'], lastMsgId, promptVersion, createdAt, updatedAt, readAt) UNIQUE(bookId, day)
+NoteItem  (id, entryId, sessionId, messageId, ord, kind, point, detail, quote, chapter, para, sentence, chapterLabel)
 ```
+Deleting a conversation deletes the 札记 notes made from it; deleting a book deletes its conversations and 札记 (M13).
 `dict.db` (read-only): `entry(word PK, phonetic, pos, gloss)` and `forms(form PK, lemma)`.
 
 `Lookup` is deliberately rich: later it becomes the data source for the vocabulary tab and agent memory. Do not trim its fields.
