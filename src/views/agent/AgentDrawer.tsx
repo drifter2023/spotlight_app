@@ -40,6 +40,8 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
   const [page, setPage] = useState<Page>(EMPTY_PAGE);
   const [sel, setSel] = useState(0);
   const [draft, setDraft] = useState('');
+  /** The conversation a question was sent in since the drawer opened. */
+  const [askedIn, setAskedIn] = useState<string | null>(null);
   /** A question held because no key is stored yet. Nothing is sent until checkKey accepts one. */
   const [held, setHeld] = useState<string | null>(null);
   const heldRef = useRef<string | null>(null);
@@ -63,7 +65,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
 
   // Opening: read the text around the reader's position; the first time, continue the latest conversation.
   useEffect(() => {
-    if (!open) { heldRef.current = null; setHeld(null); return; }
+    if (!open) { heldRef.current = null; setHeld(null); setAskedIn(null); return; }
     const a = engine.current?.currentAnchor() ?? { chapter: 0, para: 0, sentence: 0 };
     const p = pageAround(book.chapters, a);
     setPage(p);
@@ -93,6 +95,13 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
     if (l) l.scrollTop = l.scrollHeight;
   }, [sid, msgs.length, shown?.state.status, shown && 'text' in shown.state ? shown.state.text : '']);
 
+  // Once a question is sent, 当前句 leaves the slot above the input and follow-ups are asked about the same text
+  // (owner request 2026-11-11). A new 问旁注 selection still takes the slot; reopening the drawer, another
+  // conversation or 新对话 · 从当前句开始 brings the picker back.
+  const convQuote = askedIn !== null && askedIn === sid
+    ? shown?.quote ?? msgs.flatMap((m) => (m.role === 'user' && m.quote ? [m.quote] : [])).at(-1)
+    : undefined;
+
   // --- sentence picker: the sentence on the middle line is the selected one (AGENT_DRAWER.md §4.2) ---
   const scrollPick = useCallback((i: number, smooth: boolean) => {
     const el = pickRef.current;
@@ -103,7 +112,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
   }, []);
   const lock = (ms: number) => { tapLock.current = true; clearTimeout(lockTimer.current); lockTimer.current = window.setTimeout(() => { tapLock.current = false; }, ms); };
   // The picker is remounted when an attachment leaves its slot: centre the selected sentence again.
-  const picking = attachment === null;
+  const picking = attachment === null && convQuote === undefined;
   useEffect(() => {
     if (!open || !flat.length || !picking) return;
     lock(300);
@@ -153,11 +162,14 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
       setSid(id);
     }
     const sessionId = id;
-    const quote = attachment?.text ?? sentence.text;
-    if (attachment) onAttachment(null); // sent with this question; the next one is about the picked sentence again
+    const quote = attachment?.text ?? (id === sid ? convQuote : undefined) ?? sentence.text;
+    // Text from the page (问旁注) unless it is one of the picker's sentences.
+    const selected = attachment !== null || !flat.some((x) => x.text === quote);
+    if (attachment) onAttachment(null); // sent with this question; follow-ups are about it too
+    setAskedIn(sessionId);
     setLive({ sid: sessionId, question, quote, state: { status: 'waiting' } });
     const final = await service.ask({
-      sessionId, question, sentence: quote, selected: attachment !== null, title: book.title, chapter: page.chapterTitle,
+      sessionId, question, sentence: quote, selected, title: book.title, chapter: page.chapterTitle,
       reading: readingContext(book.chapters, page),
     }, (state) => { if (alive.current) setLive((cur) => (cur && cur.sid === sessionId && cur.question === question ? { ...cur, state } : cur)); });
     if (!alive.current) return;
@@ -167,10 +179,11 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
       setMsgs(await loadMessages(db, sessionId));
       setLive((cur) => (cur && cur.sid === sessionId && cur.question === question ? null : cur));
     }
-  }, [flat, sel, shown, sid, db, book, page, service, refreshSessions, attachment, onAttachment]);
+  }, [flat, sel, shown, sid, db, book, page, service, refreshSessions, attachment, onAttachment, convQuote]);
 
   const used = new Set(msgs.filter((m) => m.role === 'user').map((m) => m.text));
-  const chips = attachment ? [...SELECTION_SUGGESTIONS] : SUGGESTIONS.filter((q) => !used.has(q));
+  const onSelection = attachment !== null || (convQuote !== undefined && !flat.some((x) => x.text === convQuote));
+  const chips = (onSelection ? SELECTION_SUGGESTIONS : SUGGESTIONS).filter((q) => attachment !== null || !used.has(q));
   const current = sessions.find((s) => s.id === sid);
   const title = current?.title || (shown ? shown.question : '新对话');
   const quoteOf = (s: AgentSession) => book.chapters[s.chapter]?.paras[s.anchorPara]?.[s.anchorSentence] ?? '';
@@ -228,10 +241,10 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
       </div>
 
       <div ref={listRef} className="ag-list">
-        {msgs.map((m, i) => <Message key={i} m={m} />)}
+        {msgs.map((m, i) => <Message key={i} m={m} repeat={m.role === 'user' && m.quote === lastQuote(msgs, i)} />)}
         {shown && (
           <>
-            <Message m={{ role: 'user', text: shown.question, quote: shown.quote, at: 0 }} />
+            <Message m={{ role: 'user', text: shown.question, quote: shown.quote, at: 0 }} repeat={shown.quote === lastQuote(msgs, msgs.length)} />
             <div className="ag-msg">
               {shown.state.status === 'waiting' && <Dots />}
               {shown.state.status === 'streaming' && <Answer text={shown.state.text} caret />}
@@ -275,7 +288,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
             </svg>
           </button>
         </div>
-      ) : (
+      ) : convQuote !== undefined ? null : (
         <div className="ag-now">
           <div className="ag-now-head"><span className="ag-label">当前句</span><span className="ag-hint">滑动或点选一句</span></div>
           <div ref={pickRef} className="ag-pick" onScroll={(e) => onPick(e.currentTarget)} data-noswipe="">
@@ -294,7 +307,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
         </div>
       )}
       <form className="ag-composer" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
-        <input ref={inputRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={attachment ? '就这段文字提问' : '在页边写下你的问题'} aria-label="问题" enterKeyHint="send" />
+        <input ref={inputRef} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={attachment ? '就这段文字提问' : convQuote !== undefined ? '继续问' : '在页边写下你的问题'} aria-label="问题" enterKeyHint="send" />
         <button type="submit" className="ag-send" aria-label="发送" disabled={!draft.trim()}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 12V2M7 2L2.5 6.5M7 2l4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -318,11 +331,18 @@ function Answer({ text, caret = false }: { text: string; caret?: boolean }) {
   );
 }
 
-function Message({ m }: { m: AgentMessage }) {
+/** The quote of the last user message before `i`. */
+function lastQuote(msgs: AgentMessage[], i: number) {
+  for (let j = i - 1; j >= 0; j--) { const m = msgs[j]!; if (m.role === 'user') return m.quote; }
+  return undefined;
+}
+
+/** `repeat`: the question is about the same text as the one before it, so its quote is not shown again. */
+function Message({ m, repeat = false }: { m: AgentMessage; repeat?: boolean }) {
   if (m.role === 'user') {
     return (
       <div className="ag-msg">
-        {m.quote && <div className="ag-quote">“{m.quote}”</div>}
+        {m.quote && !repeat && <div className="ag-quote">“{m.quote}”</div>}
         <div className="ag-user"><div className="ag-bubble">{m.text}</div></div>
       </div>
     );

@@ -19,8 +19,11 @@ async function chooseLink(page: Page, text: string) {
 }
 
 async function back(page: Page) {
-  await showChrome(page); // ‹ 书架 shows with the chrome (owner decision 2026-11-11)
-  await page.getByRole('button', { name: '‹ 书架' }).click();
+  // ‹ 书架 shows with the chrome (owner decision 2026-11-11). Show it again on each try: it fades after 5 s idle.
+  await expect(async () => {
+    await showChrome(page);
+    await page.getByRole('button', { name: '‹ 书架' }).click({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
   await expect(page.locator('.reader-layer')).toHaveCount(0);
   await expect(page.getByTestId('flight')).toHaveCount(0);
 }
@@ -30,7 +33,7 @@ test('L-03/L-04: a pasted link imports through /api/fetch, opens, dedupes, and r
   const bodies: string[] = [];
   await page.route('**/api/fetch', async (route) => {
     bodies.push(route.request().postData() ?? '');
-    await page.waitForTimeout(150); // long enough to see 正在抓取网页
+    await page.waitForTimeout(1000); // long enough to see 正在抓取网页, even on a slow CI runner
     await route.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Final-Url': 'https://coastal.example/harbour' }, body: ARTICLE });
   });
   await page.goto('/');
