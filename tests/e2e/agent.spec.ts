@@ -78,7 +78,7 @@ test('A-01…A-05: swipe left opens the Agent drawer, a question is answered wit
   await page.reload();
   await ready(page);
   await swipe(page, 330, 40);
-  await expect(panel.locator('.ag-answer')).toHaveText('很克制，没有形容情绪的词。');
+  await expect(panel.locator('.ag-answer')).toHaveText(['很克制，没有形容情绪的词。', '很克制，没有形容情绪的词。']); // the question and its follow-up
   await expect(panel.locator('.ag-meta')).toContainText('历史 1');
   await expect(panel.locator('.ag-now')).toHaveCount(1); // reopened: 当前句 is back to pick another sentence
 });

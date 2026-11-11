@@ -3,8 +3,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { fullTier, openFromHome, ready, showChrome } from './helpers.ts';
 
 async function back(page: Page) {
-  await showChrome(page); // ‹ 书架 shows with the chrome (owner decision 2026-11-11)
-  await page.getByRole('button', { name: '‹ 书架' }).click();
+  // ‹ 书架 shows with the chrome (owner decision 2026-11-11). Show it again on each try: it fades after 5 s idle.
+  await expect(async () => {
+    await showChrome(page);
+    await page.getByRole('button', { name: '‹ 书架' }).click({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
   await expect(page.locator('.reader-layer')).toHaveCount(0);
   await expect(page.getByTestId('flight')).toHaveCount(0);
 }
