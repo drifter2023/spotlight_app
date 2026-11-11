@@ -236,7 +236,7 @@ describe('reader reach and the chrome', () => {
     expect(drawer()).toBeTruthy();
     if (!__CI__) expect(performance.now() - t0).toBeLessThan(100); // R-04, a device budget
     expect(scroller.scrollTop).toBe(top);
-    expect(document.querySelector('.rd-hl')?.textContent).toBe(sw.word);
+    expect(document.querySelector('.rd-hl')?.firstChild?.textContent).toBe(sw.word);
 
     clickAt(8, window.innerHeight / 2);
     const closed = performance.now();
@@ -261,7 +261,7 @@ describe('reader reach and the chrome', () => {
     const mb = moved.getBoundingClientRect();
     expect(Math.abs(mb.top + mb.height / 2 - (box.top + box.height / 2))).toBeLessThan(24);
     expect(moved.style.filter).toBe('none');
-    expect(moved.querySelector('.rd-hl')?.textContent).toBe(bw.word);
+    expect(moved.querySelector('.rd-hl')?.firstChild?.textContent).toBe(bw.word);
   });
 
   it('with 聚焦模糊 off a word below the band opens at once', async () => {
@@ -284,6 +284,6 @@ describe('reader reach and the chrome', () => {
     expect(drawer()).toBeTruthy();
     if (!__CI__) expect(performance.now() - t1).toBeLessThan(100); // R-04, a device budget
     expect(scroller.scrollTop).toBe(still);
-    expect(document.querySelector('.rd-hl')?.textContent).toBe(fw.word);
+    expect(document.querySelector('.rd-hl')?.firstChild?.textContent).toBe(fw.word);
   });
 });
