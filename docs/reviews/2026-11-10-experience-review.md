@@ -263,3 +263,17 @@ Not built:
 - **O1–O7**: owner decisions, unchanged.
 
 Verified here: `npm run typecheck`, `npm run build` and the unit project (`npx vitest run --project unit`, 202 tests) pass. The browser and e2e tests added or changed for S1, S3, M1, S4, S7, S8, S11, S12 and M2 run in CI only.
+
+### Owner decisions, 2026-11-11 (all built on `review/reading-experience`)
+
+| Item | Decision | Commit |
+|---|---|---|
+| O1 | Remove 带读 entirely: bar, play button, speed setting and guide engine. S9 is moot. | `dd169f8` |
+| O2 | One-line first-run hint, shown once | `7ba0c3d` |
+| O3 | Chrome idle 3 s → 5 s | `6cdc209` |
+| O4 | (b): eyebrow .62 / .5, saved footnote .66 / .6, predicted .62 / .5 at weight 400 | `9e0c304` |
+| O5 | 撤回 → 认识, with the copy that names it | `8ffa59a`, `170ef4f` |
+| O6 | One night accent: Home uses #ffb4b4 | `05f7b44` |
+| O7 | Resolved by O1: `CLAUDE.md` and TASKS M12 record the removal | `dd169f8` |
+
+S2 still waits for the e2e suite to run on CI (see PR #6).
