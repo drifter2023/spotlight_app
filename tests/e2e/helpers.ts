@@ -3,7 +3,8 @@ import { expect, type Page, type Route } from '@playwright/test';
 /** Waits for body lines and for the first-launch probe to finish. */
 export async function ready(page: Page) {
   await page.locator('.rd-line[data-p]').first().waitFor();
-  await expect(page.locator('.rd-probing')).toHaveCount(0, { timeout: 20_000 });
+  // The first-launch probe measures frames; on a shared CI runner WebKit takes longer than 20 s.
+  await expect(page.locator('.rd-probing')).toHaveCount(0, { timeout: process.env.CI ? 45_000 : 20_000 });
 }
 
 /** Skips the probe in tests that don't measure it (the tier is a stored setting). */
