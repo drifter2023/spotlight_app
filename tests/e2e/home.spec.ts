@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { fullTier, openFromHome, ready, tapTitle } from './helpers.ts';
+import { fullTier, openFromHome, ready, showChrome } from './helpers.ts';
 
 async function back(page: Page) {
-  await tapTitle(page);
+  await showChrome(page); // ‹ 书架 shows with the chrome (owner decision 2026-11-11)
   await page.getByRole('button', { name: '‹ 书架' }).click();
   await expect(page.locator('.reader-layer')).toHaveCount(0);
   await expect(page.getByTestId('flight')).toHaveCount(0);

@@ -1,4 +1,7 @@
-/** ‹ 书架 stays up. The title bar and the capsule (目录 · Aa) show and hide together. */
+/**
+ * ‹ 书架, the title bar and the capsule (目录 · Aa) show and hide together: a tap on blank space, the page
+ * edge or the title area brings them up (owner decision 2026-11-11; ‹ 书架 used to stay on the page).
+ */
 export function ReaderChrome({ visible, title, onBack, onToc, onSettings }: {
   visible: boolean; title: string; onBack: () => void; onToc: () => void; onSettings: () => void;
 }) {
@@ -6,8 +9,9 @@ export function ReaderChrome({ visible, title, onBack, onToc, onSettings }: {
     <>
       <button
         type="button"
-        className="rd-back"
-        tabIndex={0}
+        className={visible ? 'rd-back rd-chrome-on' : 'rd-back'}
+        aria-hidden={!visible}
+        tabIndex={visible ? 0 : -1}
         onClick={(e) => { e.stopPropagation(); onBack(); }}
       >
         ‹ 书架

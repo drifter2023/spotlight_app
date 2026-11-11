@@ -47,6 +47,13 @@ export async function wordInBand(page: Page, word: string, nth = 0): Promise<{ x
   return pt;
 }
 
+/** Shows ‹ 书架, 目录 and Aa if they are hidden (a title-area tap would hide them if they were up). */
+export async function showChrome(page: Page) {
+  const on = await page.locator('.rd-top').evaluate((el) => el.classList.contains('rd-chrome-on'));
+  if (!on) await tapTitle(page);
+  await expect(page.locator('.rd-back')).toHaveClass(/rd-chrome-on/);
+}
+
 /** A tap in the title area (the eyebrow strip at the top): shows or hides ‹ 书架, 目录 and Aa (N-01). */
 export async function tapTitle(page: Page) {
   const vp = page.viewportSize()!;

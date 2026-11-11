@@ -23,8 +23,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Shown: Story = {};
 
-/** ‹ 书架 stays tappable while the title and capsule are hidden. */
-export const BackWhileCapsuleHidden: Story = { args: { visible: false } };
+/** Reading: ‹ 书架, the title and the capsule are all hidden; a tap on blank space or the title area brings them up. */
+export const Hidden: Story = { args: { visible: false } };
 
 /** 夜读: the same capsule on the night page. */
 export const Night: Story = { globals: { theme: 'night' } };
