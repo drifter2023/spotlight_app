@@ -7,6 +7,16 @@ async function open(page: Page) {
   await ready(page);
 }
 const drawer = (page: Page) => page.getByTestId('drawer');
+/** Centre of the highlighted word's own text, once its footnote is in (opening a word footnotes it and re-decorates the line). */
+async function hlPoint(page: Page) {
+  await expect(page.locator('.rd-hl .rd-fn')).toHaveCount(1);
+  return page.evaluate(() => {
+    const r = document.createRange();
+    r.selectNodeContents(document.querySelector('.rd-hl')!.firstChild!);
+    const b = r.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  });
+}
 
 test('R-04: tap to drawer ≤ 100 ms; lemma, IPA, POS and gloss shown', async ({ page }) => {
   await open(page);
@@ -46,12 +56,15 @@ test('R-05: same word closes; another word closes first, then opens; a tap elsew
   const a = await wordInBand(page, 'advice');
   await page.mouse.click(a.x, a.y);
   await expect(page.locator('.wd-word')).toHaveText('advice');
-  await page.mouse.click(a.x, a.y);
+  const a2 = await hlPoint(page);
+  await page.mouse.click(a2.x, a2.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'closing');
   await expect(drawer(page)).toHaveCount(0);
 
-  await page.mouse.click(a.x, a.y);
+  const a3 = await wordInBand(page, 'advice');
+  await page.mouse.click(a3.x, a3.y);
   await expect(page.locator('.wd-word')).toHaveText('advice');
+  await hlPoint(page);
   const b = await page.evaluate(() => {
     const line = [...document.querySelectorAll<HTMLElement>('.rd-line[data-p]')].find((l) => /\bfather\b/.test(l.textContent ?? ''))!;
     const w = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
