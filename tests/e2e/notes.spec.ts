@@ -43,10 +43,12 @@ async function ask(page: Page, questions: string[]) {
   const panel = page.locator('.ag-panel');
   await swipe(page, 330, 40);
   await expect(panel).toHaveAttribute('aria-hidden', 'false');
+  await page.waitForTimeout(500); // the drawer has loaded the conversation it continues
+  const before = await panel.locator('.ag-answer').count();
   for (const [i, q] of questions.entries()) {
     await panel.getByLabel('问题').fill(q);
     await panel.getByLabel('问题').press('Enter');
-    await expect(panel.locator('.ag-answer')).toHaveCount(i + 1);
+    await expect(panel.locator('.ag-answer')).toHaveCount(before + i + 1);
     await expect(panel.locator('.ag-caret')).toHaveCount(0);
   }
   await swipe(page, 40, 330);
@@ -124,7 +126,8 @@ test('Z-09 Z-10 Z-13 Z-14: two questions → 今天的对话 → 整理 → 今�
   await expect(notes).toHaveCount(0);
   await expect(line(page)).toHaveText(/^札记/); // seen: the line returns to 札记
   await expect(line(page)).not.toContainText('今天 ·');
-  await page.reload();
+  await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
+  await page.goto('/'); // not reload(): the URL still opens the book
   await line(page).click();
   await expect(page.getByRole('switch', { name: '自动整理' })).not.toBeChecked();
 });
@@ -232,6 +235,7 @@ test('Z-11: 对话 opens a conversation in its book at the saved place; deleting
 
   // Gone from the drawer's history too.
   await page.getByRole('button', { name: '‹ 书架' }).click();
+  await page.waitForTimeout(600); // user.db persists after a 300 ms debounce
   await page.goto('/?book=gatsby');
   await ready(page);
   await swipe(page, 330, 40);
