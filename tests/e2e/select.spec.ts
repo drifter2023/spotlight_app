@@ -180,4 +180,10 @@ test('N-06: 问旁注 opens the Agent drawer with the selection in 当前句\'s 
   expect(bodies[0]!.messages.at(-1)!.content).toContain('问题：解释这段');
   await expect(panel.locator('.ag-quote').last()).toHaveText(`“${text}”`);
   await expect(panel.locator('.ag-attach')).toHaveCount(0);
+  await expect(panel.locator('.ag-now')).toHaveCount(0); // nothing takes its slot; follow-ups are about the same text
+  await expect(panel.locator('.ag-caret')).toHaveCount(0); // the answer has finished
+  await panel.getByLabel('问题').fill('为什么');
+  await panel.getByLabel('问题').press('Enter');
+  await expect.poll(() => bodies.length).toBe(2);
+  expect(bodies[1]!.messages.at(-1)!.content).toContain(`所选文字：${text}`);
 });

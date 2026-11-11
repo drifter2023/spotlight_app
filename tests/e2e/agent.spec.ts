@@ -57,6 +57,18 @@ test('A-01…A-05: swipe left opens the Agent drawer, a question is answered wit
   await expect(panel.locator('.ag-title-text')).toHaveText('这段的语气');
   await expect(panel.locator('.ag-chip', { hasText: '这段的语气' })).toHaveCount(0); // used suggestions leave the list
 
+  // Once asked, 当前句 leaves the slot and a follow-up is about the same sentence, quoted only once (owner request 2026-11-11).
+  await expect(panel.locator('.ag-now')).toHaveCount(0);
+  await expect(panel.getByLabel('问题')).toHaveAttribute('placeholder', '继续问');
+  const first = /所选句：(.*)\n/.exec(bodies[0]!.messages[1]!.content)![1]!;
+  await expect(panel.locator('.ag-caret')).toHaveCount(0); // the answer has finished
+  await panel.getByLabel('问题').fill('为什么');
+  await panel.getByLabel('问题').press('Enter');
+  await expect.poll(() => bodies.length).toBe(2);
+  expect(bodies[1]!.messages.at(-1)!.content).toContain(`所选句：${first}\n`);
+  await expect(panel.locator('.ag-answer')).toHaveCount(2);
+  await expect(panel.locator('.ag-quote')).toHaveCount(1);
+
   // A-04: swipe right brings the page back.
   await swipe(page, 40, 330);
   await expect(panel).toHaveAttribute('aria-hidden', 'true');
@@ -68,6 +80,7 @@ test('A-01…A-05: swipe left opens the Agent drawer, a question is answered wit
   await swipe(page, 330, 40);
   await expect(panel.locator('.ag-answer')).toHaveText('很克制，没有形容情绪的词。');
   await expect(panel.locator('.ag-meta')).toContainText('历史 1');
+  await expect(panel.locator('.ag-now')).toHaveCount(1); // reopened: 当前句 is back to pick another sentence
 });
 
 for (const vp of [{ name: 'phone', width: 402, height: 874 }, { name: 'iPad', width: 820, height: 1180 }, { name: 'iPad landscape', width: 1180, height: 820 }]) {
