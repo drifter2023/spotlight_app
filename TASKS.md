@@ -82,6 +82,8 @@ Each task lists its acceptance ID from `design/MVP 设计与范围 · 聚焦阅�
 53. iOS: no edit menu, loupe or callout on a long-press (Safari, home-screen web app, Capacitor). **N-07**
 
 ## M12 · 夜读 1c and 带读 (plan: `docs/plans/2026-10-20-night-guide.md`, handoff `docs/handoff/2026-10-20/NIGHT_MODE_1c.md`; the handoff's N-xx are NM-xx here)
+
+> **2026-11-11, owner decision:** 带读 is removed (bar, play button, speed setting, guide engine). The 带读 items below (NM-04…NM-08, the guideSpeed half of NM-10) are retired; 夜读 1c stays.
 54. Theme: the Home capsule stays the only switch, for the whole app (owner decision); `guideSpeed` in Settings; both persist. **NM-10**
 55. Night tokens in the reader: accent `#ffb4b4`, tapped word, footnotes, the vignette instead of the fade masks; layout unchanged (owner decision). **NM-01**
 56. Night drawer material (violet-grey stripes, accent headword, Save gradient), 4a timings and notches. **NM-09**

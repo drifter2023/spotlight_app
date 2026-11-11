@@ -32,23 +32,6 @@ function stubDb(): Db {
   };
 }
 
-/** Colour from `#rrggbb` or `rgb(a)(…)`, alpha-composited over the page colour by the caller's choice of page. */
-function rgb(css: string): [number, number, number, number] {
-  const c = css.trim();
-  if (c.startsWith('#')) return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16), 1];
-  const n = c.match(/[\d.]+/g)!.map(Number);
-  return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n[3] ?? 1];
-}
-function contrast(fg: [number, number, number, number], bg: [number, number, number, number]): number {
-  const mix = fg.slice(0, 3).map((v, i) => v * fg[3] + (bg[i] ?? 0) * (1 - fg[3]));
-  const lum = (c: number[]) => {
-    const [r = 0, g = 0, b = 0] = c.map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
-  const l1 = lum(mix), l2 = lum(bg.slice(0, 3));
-  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-}
-
 function wordPoint(line: HTMLElement, n: number): { x: number; y: number; word: string } | null {
   const w = [...words(line.textContent ?? '')][n];
   const node = line.firstChild;
@@ -80,7 +63,7 @@ const drawer = () => document.querySelector('[data-testid="drawer"]');
 describe('scroll a soft line to the centre', () => {
   it('puts the line in the band without reading layout per frame', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, guideSpeed: 1, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false });
     engine = e;
     await e.mount(null);
     el.scrollTop = 80;
@@ -122,7 +105,7 @@ describe('scroll a soft line to the centre', () => {
 
   it('a cancelled scroll does not finish', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, guideSpeed: 1, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false });
     engine = e;
     await e.mount(null);
     await frames(2);
@@ -142,7 +125,7 @@ describe('scroll a soft line to the centre', () => {
   });
 });
 
-describe('reader reach and the guide bar', () => {
+describe('reader reach and the chrome', () => {
   let prefs: PrefsStore;
 
   async function mount() {
@@ -158,43 +141,24 @@ describe('reader reach and the guide bar', () => {
     await frames(2);
   }
 
-  it('mounts the guide bar in 纸白, and it steps aside while chrome is up', async () => {
+  it('a tap in the title area shows and hides the chrome, and never opens a word or scrolls', async () => {
     await mount();
-    expect(prefs.get().theme).toBe('paper');
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
-    expect(document.querySelector('.rd-guide')).toBeNull();
-    // The bar is ink on paper (review S1): speed labels and the play glyph meet 4.5 : 1 on the page.
-    const page = rgb(getComputedStyle(document.documentElement).getPropertyValue('--paper'));
-    expect(contrast(rgb(getComputedStyle(document.querySelector('.gd-speeds button:not([aria-checked="true"]) span')!).color), page)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(rgb(getComputedStyle(document.querySelector('.gd-play-disc')!).color), page)).toBeGreaterThanOrEqual(4.5);
-    await prefs.set('theme', 'night');
-    await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeNull();
-    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(false);
-    clickAt(window.innerWidth / 2, 64);
-    await frames(1);
-    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(true);
-    expect(document.querySelector('.gd-bar')).toBeNull();
-    clickAt(window.innerWidth / 2, 64);
-    await frames(1);
-    await prefs.set('theme', 'paper');
-    await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
-    expect(document.querySelector('.rd-guide')).toBeNull();
-
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
     const held = scroller.scrollTop;
     clickAt(window.innerWidth / 2, 64);
     await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeNull();
     expect(document.querySelector('.rd-top')?.classList.contains('rd-chrome-on')).toBe(true);
     await sleep(800);
     expect(drawer()).toBeNull();
     expect(scroller.scrollTop).toBe(held);
     clickAt(window.innerWidth / 2, 64);
     await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
     expect(document.querySelector('.rd-top')?.classList.contains('rd-chrome-on')).toBe(false);
+    // 带读 is gone (owner decision 2026-11-11): no bar, no play button, in either theme.
+    expect(document.querySelector('.gd-bar, .rd-guide')).toBeNull();
+    await prefs.set('theme', 'night');
+    await frames(1);
+    expect(document.querySelector('.gd-bar, .rd-guide')).toBeNull();
   });
 
   it('a tap on the capsule\'s place just after it fades brings it back instead of opening a word (review S3)', async () => {

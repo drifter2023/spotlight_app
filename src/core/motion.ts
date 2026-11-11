@@ -9,7 +9,7 @@ export const MOTION = {
 
 /**
  * The same curve as EASE, as a function of progress (for motion the code drives itself, e.g. the
- * 带读 scroll): x(u) is solved for u by Newton steps, then y(u) is returned.
+ * reach scroll that brings a blurred word to the centre): x(u) is solved for u by Newton steps, then y(u) is returned.
  */
 export function ease(t: number): number {
   if (t <= 0) return 0;

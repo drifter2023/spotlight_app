@@ -32,7 +32,7 @@ const SCROLL_LOCK_MS = MOTION.drawerClose;
 const KEEP_BOTTOM = 70;
 /** Beta metric: does the reader scroll again within 10 s of closing a drawer? */
 const RESCROLL_MS = 10000;
-/** A soft word scrolls to the viewport centre, then its drawer opens (same length as a 带读 step). */
+/** A soft word scrolls to the viewport centre, then its drawer opens. */
 const REACH_MS = 600;
 
 export interface WordLookup {
