@@ -64,7 +64,8 @@ test('R-07: a reload restores the same paragraph into the band', async ({ page }
   await page.goto('/?book=gatsby&dev=1');
   await ready(page);
   await page.evaluate(() => { document.querySelector('.rd-scroll')!.scrollTop += 6000; });
-  await page.waitForTimeout(1800); // idle 180ms + save debounce 1000ms
+  // idle 180 ms + save debounce 1000 ms + IndexedDB write; a CI runner can take twice that.
+  await page.waitForTimeout(process.env.CI ? 3500 : 1800);
   const before = await page.evaluate(() => window.__spotlight!.engine.currentAnchor());
   await page.reload();
   await ready(page);

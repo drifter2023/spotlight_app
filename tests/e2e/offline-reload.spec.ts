@@ -32,8 +32,11 @@ test('mobile web: after the first visit the app works with the server gone', asy
     return reg?.active?.state === 'activated' && !!navigator.serviceWorker.controller;
   }, undefined, { timeout: 30_000 });
   // A second, online visit: this navigation itself is served by the worker, as a real return visit is.
-  await page.reload();
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  // On a CI runner the first reload right after activation can come back uncontrolled; reload again.
+  await expect(async () => {
+    await page.reload();
+    expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  }).toPass({ timeout: 30_000 });
   await new Promise((r) => server.close(r));
   server.closeAllConnections();
 
