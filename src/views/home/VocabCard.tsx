@@ -63,7 +63,7 @@ export function VocabCardView({ state, size, onSkip, onTest }: {
           <button type="button" className="ai-link" onClick={onTest}>{state === 'done' ? '重新测试' : '测一测词汇量'}</button>
         </div>
       )}
-      <p className="ai-fine">根据你查过的词、撤回的词和读过的内容估计，只在这台设备上计算。</p>
+      <p className="ai-fine">根据你查过的词、标为「认识」的词和读过的内容估计，只在这台设备上计算。</p>
     </section>
   );
 }

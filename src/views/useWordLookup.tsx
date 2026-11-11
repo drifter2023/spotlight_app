@@ -97,7 +97,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return out;
   };
   /**
-   * `later`: a re-prediction after a lookup or 撤回. Lines on and near the screen keep their footnotes
+   * `later`: a re-prediction after a lookup or 认识 (formerly 撤回). Lines on and near the screen keep their footnotes
    * until a scroll takes them out of view, so glosses never come and go under the reader (review M1).
    */
   const applyFootnotes = (later = false) => {
@@ -500,7 +500,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   };
 
   /**
-   * The drawer's 撤回: this book forgets the word (rows, saved state, footnotes), then the drawer
+   * The drawer's 认识 (formerly 撤回): this book forgets the word (rows, saved state, footnotes), then the drawer
    * closes. The reader knows it, so it is never predicted again (P-04).
    */
   const undo = () => {
