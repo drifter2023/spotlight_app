@@ -63,7 +63,7 @@ const drawer = () => document.querySelector('[data-testid="drawer"]');
 describe('scroll a soft line to the centre', () => {
   it('puts the line in the band without reading layout per frame', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, guideSpeed: 1, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 24), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: true });
     engine = e;
     await e.mount(null);
     el.scrollTop = 80;
@@ -105,7 +105,7 @@ describe('scroll a soft line to the centre', () => {
 
   it('a cancelled scroll does not finish', async () => {
     const el = host(402, Math.min(720, window.innerHeight - 8));
-    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, guideSpeed: 1, blurMaxSet: false });
+    const e = new ReaderEngine(el, makeBook(1, 16), { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: 'full', theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: true });
     engine = e;
     await e.mount(null);
     await frames(2);
@@ -125,7 +125,7 @@ describe('scroll a soft line to the centre', () => {
   });
 });
 
-describe('reader reach and the guide bar', () => {
+describe('reader reach and the chrome', () => {
   let prefs: PrefsStore;
 
   async function mount() {
@@ -141,39 +141,82 @@ describe('reader reach and the guide bar', () => {
     await frames(2);
   }
 
-  it('mounts the guide bar in 纸白, and it steps aside while chrome is up', async () => {
-    await mount();
-    expect(prefs.get().theme).toBe('paper');
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
-    expect(document.querySelector('.rd-guide')).toBeNull();
-    await prefs.set('theme', 'night');
-    await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeNull();
-    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(false);
-    clickAt(window.innerWidth / 2, 64);
-    await frames(1);
-    expect(document.querySelector('.rd-guide')?.classList.contains('rd-chrome-on')).toBe(true);
-    expect(document.querySelector('.gd-bar')).toBeNull();
-    clickAt(window.innerWidth / 2, 64);
-    await frames(1);
-    await prefs.set('theme', 'paper');
-    await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
-    expect(document.querySelector('.rd-guide')).toBeNull();
+  it('shows the one-line first-run hint once, never again (review O2)', async () => {
+    await mount(); // fresh settings: not hinted yet
+    await expect.poll(() => document.querySelector('.rd-hint')?.textContent, { timeout: 3000 }).toContain('点清晰的词查义');
+    expect(prefs.get().hinted).toBe(true);
+    // Open a book again with the same settings: no hint.
+    root?.unmount();
+    document.body.innerHTML = '';
+    const page = document.createElement('div');
+    document.body.append(page);
+    root = createRoot(page);
+    const book: ReaderBook = { ...makeBook(1, 20), title: 'Again' };
+    flushSync(() => { root!.render(createElement(ReaderView, { session: { db: stubDb(), prefs }, book, initialAnchor: null, onBack: () => {} })); });
+    await waitFor('.rd-line[data-p]');
+    await sleep(500);
+    expect(document.querySelector('.rd-hint')).toBeNull();
+  });
 
+  it('a tap in the title area shows and hides the chrome, and never opens a word or scrolls', async () => {
+    await mount();
     const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
     const held = scroller.scrollTop;
     clickAt(window.innerWidth / 2, 64);
     await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeNull();
     expect(document.querySelector('.rd-top')?.classList.contains('rd-chrome-on')).toBe(true);
     await sleep(800);
     expect(drawer()).toBeNull();
     expect(scroller.scrollTop).toBe(held);
     clickAt(window.innerWidth / 2, 64);
     await frames(1);
-    expect(document.querySelector('.gd-bar')).toBeTruthy();
     expect(document.querySelector('.rd-top')?.classList.contains('rd-chrome-on')).toBe(false);
+    // 带读 is gone (owner decision 2026-11-11): no bar, no play button, in either theme.
+    expect(document.querySelector('.gd-bar, .rd-guide')).toBeNull();
+    await prefs.set('theme', 'night');
+    await frames(1);
+    expect(document.querySelector('.gd-bar, .rd-guide')).toBeNull();
+  });
+
+  it('a tap on the capsule\'s place just after it fades brings it back instead of opening a word (review S3)', async () => {
+    await mount();
+    const top = () => document.querySelector('.rd-top')?.classList.contains('rd-chrome-on');
+    clickAt(window.innerWidth / 2, 64);
+    await frames(1);
+    expect(top()).toBe(true);
+    const dock = document.querySelector('.rd-dock')!.getBoundingClientRect();
+    const x = dock.left + dock.width / 2, y = dock.top + dock.height / 2;
+    await sleep(4900);
+    await expect.poll(top, { interval: 10, timeout: 3000 }).toBe(false); // the 5 s idle fade
+    clickAt(x, y); // well inside the 400 ms grace
+    await frames(1);
+    expect(top()).toBe(true);
+    await sleep(700); // no word drawer opened behind it
+    expect(drawer()).toBeNull();
+  }, 15_000);
+
+  it('a drawer that pushed the page up lets it settle back as it closes (review M2)', async () => {
+    await mount();
+    await prefs.set('focusBlur', false); // any line opens, so a word low on the page can be tapped
+    await frames(2);
+    const scroller = document.querySelector<HTMLElement>('[data-testid="reader-scroll"]')!;
+    const box = scroller.getBoundingClientRect();
+    // The lowest line clear of the bottom edge and the 带读 bar: its drawer runs past the screen.
+    const line = [...scroller.querySelectorAll<HTMLElement>('.rd-line[data-p]')]
+      .filter((l) => { const b = l.getBoundingClientRect(); return b.top > box.top + box.height / 2 && b.bottom < box.bottom - 140 && /\w/.test(l.textContent ?? ''); })
+      .pop()!;
+    expect(line, 'a low line').toBeTruthy();
+    const p = wordPoint(line, 0)!;
+    const y0 = line.getBoundingClientRect().top;
+    const top0 = scroller.scrollTop;
+    clickAt(p.x, p.y);
+    await expect.poll(drawer, { timeout: 4000 }).toBeTruthy();
+    await expect.poll(() => scroller.scrollTop, { timeout: 4000 }).toBeGreaterThan(top0 + 8); // keep-on-screen pushed up
+    let held = -1;
+    await expect.poll(() => { const t = scroller.scrollTop; const same = t === held; held = t; return same; }, { interval: 150, timeout: 4000 }).toBe(true); // the smooth scroll ended
+    clickAt(window.innerWidth / 2, 64); // a tap in the title area only closes it, never opens another word
+    await expect.poll(drawer, { timeout: 4000 }).toBeNull();
+    await expect.poll(() => Math.abs(line.getBoundingClientRect().top - y0), { timeout: 4000 }).toBeLessThanOrEqual(1);
   });
 
   it('opens a sharp word at once, and scrolls a blurred word into the band before opening it', async () => {
@@ -193,7 +236,7 @@ describe('reader reach and the guide bar', () => {
     expect(drawer()).toBeTruthy();
     if (!__CI__) expect(performance.now() - t0).toBeLessThan(100); // R-04, a device budget
     expect(scroller.scrollTop).toBe(top);
-    expect(document.querySelector('.rd-hl')?.textContent).toBe(sw.word);
+    expect(document.querySelector('.rd-hl')?.firstChild?.textContent).toBe(sw.word);
 
     clickAt(8, window.innerHeight / 2);
     const closed = performance.now();
@@ -218,7 +261,7 @@ describe('reader reach and the guide bar', () => {
     const mb = moved.getBoundingClientRect();
     expect(Math.abs(mb.top + mb.height / 2 - (box.top + box.height / 2))).toBeLessThan(24);
     expect(moved.style.filter).toBe('none');
-    expect(moved.querySelector('.rd-hl')?.textContent).toBe(bw.word);
+    expect(moved.querySelector('.rd-hl')?.firstChild?.textContent).toBe(bw.word);
   });
 
   it('with 聚焦模糊 off a word below the band opens at once', async () => {
@@ -241,6 +284,6 @@ describe('reader reach and the guide bar', () => {
     expect(drawer()).toBeTruthy();
     if (!__CI__) expect(performance.now() - t1).toBeLessThan(100); // R-04, a device budget
     expect(scroller.scrollTop).toBe(still);
-    expect(document.querySelector('.rd-hl')?.textContent).toBe(fw.word);
+    expect(document.querySelector('.rd-hl')?.firstChild?.textContent).toBe(fw.word);
   });
 });

@@ -5,23 +5,20 @@ export type FontSize = 'S' | 'M' | 'L';
 export type Tier = 'full' | 'fallback';
 /** 纸白 (4a, 7a) or 夜读 (1c reader, 7b colours on Home); one theme for the whole app. */
 export type Theme = 'paper' | 'night';
-/** 带读 speeds (NIGHT_MODE_1c.md → N4): about 120 / 200 / 320 words a minute. */
-export const GUIDE_SPEEDS = [0.6, 1, 1.6] as const;
-export type GuideSpeed = (typeof GUIDE_SPEEDS)[number];
 export interface Prefs {
   fontSize: FontSize; focusPct: number; blurMax: number; sentenceMode: boolean; tier: Tier | null; theme: Theme;
   /** 预测生词 关 / 少 / 多 (P-05). */
   predict: PredictLevel;
   /** 聚焦模糊 on/off: off makes the whole page sharp and lets any word open its drawer (S-03). */
   focusBlur: boolean;
-  /** 带读 speed (N4). */
-  guideSpeed: GuideSpeed;
   /** True once the reader has moved 模糊强度 themselves; until then 夜读 uses its own default (N3). */
   blurMaxSet: boolean;
+  /** True once the one-line first-run hint has been shown; it never shows again (review O2). */
+  hinted: boolean;
 }
 export type PrefsListener = (prefs: Prefs, changed: keyof Prefs) => void;
 
-export const DEFAULT_PREFS: Prefs = { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: null, theme: 'paper', predict: 'few', focusBlur: true, guideSpeed: 1, blurMaxSet: false };
+export const DEFAULT_PREFS: Prefs = { fontSize: 'M', focusPct: 30, blurMax: 7, sentenceMode: false, tier: null, theme: 'paper', predict: 'few', focusBlur: true, blurMaxSet: false, hinted: false };
 
 /** 夜读's 模糊强度 when the reader has not set one (NIGHT_MODE_1c.md → N3). */
 export const NIGHT_BLUR_MAX = 9;
@@ -49,8 +46,8 @@ export function sanitise(p: Prefs): Prefs {
     theme: p.theme === 'night' ? 'night' : 'paper',
     predict: p.predict === 'off' || p.predict === 'many' ? p.predict : 'few',
     focusBlur: p.focusBlur !== false,
-    guideSpeed: GUIDE_SPEEDS.includes(p.guideSpeed) ? p.guideSpeed : 1,
     blurMaxSet: p.blurMaxSet === true,
+    hinted: p.hinted === true,
   };
 }
 

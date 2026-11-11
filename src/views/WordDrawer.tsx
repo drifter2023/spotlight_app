@@ -92,6 +92,20 @@ interface WordProps {
   onUndo: () => void;
 }
 
+/**
+ * The definition line: the first sense, which is also the footnote, in full weight; the other senses
+ * follow on the same line, quieter (review S4).
+ */
+function Gloss({ text }: { text: string }) {
+  const [first = '', ...rest] = text.split('，');
+  return (
+    <p className="wd-def">
+      <b>{first}</b>
+      {rest.length > 0 && <span className="wd-def-rest">{'，' + rest.join('，')}</span>}
+    </p>
+  );
+}
+
 export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }: WordProps) {
   return (
     <DrawerFrame kind="word" state={state} closing={closing} x={x}>
@@ -104,7 +118,7 @@ export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }:
             {result.phonetic && <span className="wd-ph">{result.phonetic}</span>}
             {result.pos && <span className="wd-pos">{result.pos}</span>}
           </div>
-          <p className="wd-def">{result.gloss}</p>
+          <Gloss text={result.gloss} />
           <div className="wd-actions">
             <button
               type="button"
@@ -117,10 +131,11 @@ export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }:
             <button
               type="button"
               className="wd-undo"
-              aria-label="撤回生词标记"
+              aria-label="标记为认识的词"
               onClick={(e) => { e.stopPropagation(); onUndo(); }}
             >
-              撤回
+              {/* Was 撤回 (TASKS 25); renamed by the owner 2026-11-11 (review O5): it states the fact. */}
+              认识
             </button>
           </div>
         </>
@@ -204,7 +219,7 @@ export function GrammarDrawer({ closing, run, x, onRetry, db }: {
             )}
           </div>
           {keyReason && db && keyOpen && (
-            <AiKeyCard db={db} place="leather" initiallyEditing={keyReason === 'invalid-key'} onSaved={onRetry} />
+            <AiKeyCard db={db} place="leather" title="语法分析需要 DeepSeek Key" initiallyEditing={keyReason === 'invalid-key'} onSaved={onRetry} />
           )}
         </>
       )}

@@ -71,7 +71,7 @@ export function CalibrationScreen({ step, onAnswer, onClose }: { step: Calibrati
         <div className="cal-result">
           <p className="cal-hint">估计你的词汇量大约是</p>
           <div className="cal-level">{step.size}</div>
-          <p className="cal-fine">之后查词、撤回和阅读都会继续校正这个估计。</p>
+          <p className="cal-fine">之后查词、点「认识」和阅读都会继续校正这个估计。</p>
         </div>
       )}
     </div>

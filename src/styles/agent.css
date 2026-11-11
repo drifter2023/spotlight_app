@@ -97,7 +97,8 @@
   font: 400 13.5px/1.55 'Newsreader Variable', 'Newsreader', Georgia, serif; color: var(--ag-ink);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.ag-attach-x { flex: none; width: 36px; height: 36px; margin-top: -6px; border: 0; background: none; display: grid; place-items: center; color: var(--ag-ink3); }
+/* 44 px target, pulled into the card's corner so the 12 px icon stays where it was (review S7). */
+.ag-attach-x { flex: none; width: 44px; height: 44px; margin: -10px -8px 0 0; border: 0; background: none; display: grid; place-items: center; color: var(--ag-ink3); }
 .ag-now-head { padding: 0 14px; display: flex; justify-content: space-between; align-items: baseline; }
 .ag-pick {
   height: 132px; margin-top: 4px; padding: 66px 14px; box-sizing: border-box; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;

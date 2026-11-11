@@ -3,9 +3,8 @@ import { blurMaxFor, TYPE_SCALE } from '../prefs/prefs.ts';
 import { countWords, paragraphText, sentenceStarts } from '../ingest/text.ts';
 import { ease } from '../motion.ts';
 import type { Anchor, ChapterData, Paragraph } from '../types.ts';
-import { lineOffset, lineRange, renderLine, type Footnote } from './decorate.ts';
+import { lineOffset, lineRange, outsideWindow, renderLine, type Footnote } from './decorate.ts';
 import { bandFor, blurPx, opacityFor, tFor, withSentencePenalty } from './focus.ts';
-import type { GuideHost, SentenceId } from './guide.ts';
 import { ChapterLayout, type LineMeta } from './layout.ts';
 import { nearestWord, wordBounds, wordContext, words } from './words.ts';
 
@@ -64,16 +63,11 @@ function lowerBound(arr: Float64Array, x: number): number {
   return lo;
 }
 
-/** True if `line` shows part of sentence `id`. */
-function inSentence(line: LineMeta, id: SentenceId): boolean {
-  return line.chapter === id.chapter && line.para === id.para && line.sFirst <= id.sentence && id.sentence <= line.sLast;
-}
-
 /**
  * Owns the reader's scroll container. Lays chapters out once into fixed-height lines,
  * then on scroll writes filter/opacity directly to lines within ±1 viewport.
  */
-export class ReaderEngine implements GuideHost {
+export class ReaderEngine {
   readonly stats = { paints: 0, styleWrites: 0, lastPaintMs: 0 };
   #scroller: HTMLElement;
   #content: HTMLElement;
@@ -88,9 +82,7 @@ export class ReaderEngine implements GuideHost {
   #opa = new Float64Array(0);
   /** Per line: 1 while it carries the 夜读 accent colour, 0 when not, -1 unknown (write on next paint). */
   #acc = new Int8Array(0);
-  /** 带读: the lit sentence (N4), or null. */
-  #guide: SentenceId | null = null;
-  /** The running 带读 scroll; a new one cancels it, so scrolls never stack (N-07). */
+  /** The running reach scroll (a blurred word to the centre); a new one cancels it, so scrolls never stack. */
   #anim = 0;
   /**
    * Grammar droplets for the sentences that end inside the focus band, in one overlay layer above
@@ -134,6 +126,8 @@ export class ReaderEngine implements GuideHost {
   #lastScroll = 0;
   /** Paragraphs waiting for their footnotes to be redrawn, nearest to the band first. */
   #annQueue: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+  /** Paragraphs near the screen that wait for a new annotator until they leave the window (review M1). */
+  #deferred: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
   #annTimer = 0;
 
   constructor(scroller: HTMLElement, book: EngineBook, prefs: Prefs, cb: EngineCallbacks = {}) {
@@ -196,18 +190,14 @@ export class ReaderEngine implements GuideHost {
     const focus = this.#prefs.focusBlur;
     const night = this.#prefs.theme === 'night';
     const bmax = blurMaxFor(this.#prefs);
-    const g = this.#guide;
-    const cur = !g && this.#prefs.sentenceMode ? this.#lines[this.#lineAtY(mid)] : undefined;
+    const cur = this.#prefs.sentenceMode ? this.#lines[this.#lineAtY(mid)] : undefined;
     const sharp: number[] = [];
 
     for (let i = lo; i < hi; i++) {
       const line = this.#lines[i]!;
       const top = gap && gl >= 0 && i > gl ? this.#top[i]! + gap : this.#top[i]!;
       let t = tFor(Math.abs(top + lh / 2 - mid), band);
-      // 带读: the lit sentence is sharp wherever it is, everything else one step deeper (N4 → Depth).
-      const lit = g !== null && inSentence(line, g);
-      if (g) t = lit ? 0 : withSentencePenalty(t);
-      else if (cur && !(line.chapter === cur.chapter && line.para === cur.para && line.sFirst <= cur.sFirst && cur.sFirst <= line.sLast)) {
+      if (cur && !(line.chapter === cur.chapter && line.para === cur.para && line.sFirst <= cur.sFirst && cur.sFirst <= line.sLast)) {
         t = withSentencePenalty(t);
       }
       const shown = t; // droplets follow the band, not the selection
@@ -215,8 +205,8 @@ export class ReaderEngine implements GuideHost {
       // With 聚焦模糊 off every line is sharp; droplets still mark the sentences in the band.
       const b = full && focus ? blurPx(t, bmax) : 0;
       const o = focus ? opacityFor(t, night) : 1;
-      // 夜读 accent (N3): the sharp lines of the band, or only the lit sentence while guiding.
-      const a = night && line.para >= 0 && (g ? lit : focus && shown === 0) ? 1 : 0;
+      // 夜读 accent (N3): the sharp lines of the band.
+      const a = night && line.para >= 0 && focus && shown === 0 ? 1 : 0;
       if (a !== this.#acc[i]) {
         line.el.style.color = a ? 'var(--reader-accent)' : '';
         this.#acc[i] = a;
@@ -296,10 +286,15 @@ export class ReaderEngine implements GuideHost {
     this.#scroller.scrollTop = this.#top[i]! + this.#lh / 2 - centre;
   }
 
-  /** Sets the footnote source and re-decorates mounted chapters. */
-  setAnnotator(fn: Annotator | null): void {
+  /**
+   * Sets the footnote source and re-decorates mounted chapters. With `deferVisible`, paragraphs within
+   * one viewport of the screen keep their footnotes until a scroll pause finds them outside that window,
+   * so a re-prediction never makes glosses come and go on the lines being read (review M1).
+   */
+  setAnnotator(fn: Annotator | null, opts?: { deferVisible?: boolean }): void {
     this.#annotate = fn;
-    this.refreshAnnotations();
+    if (opts?.deferVisible) this.#queueDecorate([...this.#blocks.keys()], true, true);
+    else this.refreshAnnotations();
   }
 
   /**
@@ -307,6 +302,7 @@ export class ReaderEngine implements GuideHost {
    * nearest the band go first; the rest follow in background slices, so no frame is blocked (R-01).
    */
   refreshAnnotations(): void {
+    this.#deferred = [];
     this.#queueDecorate([...this.#blocks.keys()], true);
   }
 
@@ -653,62 +649,6 @@ export class ReaderEngine implements GuideHost {
     this.paintNow();
   }
 
-  // ---- 带读 (NIGHT_MODE_1c.md → N4) ----
-
-  sentenceAtCentre(): SentenceId | null {
-    if (!this.#lines.length) return null;
-    let i = this.#lineAtY(this.#scroller.scrollTop + this.#H / 2);
-    while (i < this.#lines.length - 1 && this.#lines[i]!.para < 0) i++; // past a chapter heading
-    const l = this.#lines[i];
-    return l && l.para >= 0 ? { chapter: l.chapter, para: l.para, sentence: l.sFirst } : null;
-  }
-
-  nextSentence(id: SentenceId): SentenceId | null {
-    const paras = this.#book.chapters[id.chapter]?.paras;
-    if (!paras) return null;
-    if (id.sentence + 1 < (paras[id.para]?.length ?? 0)) return { ...id, sentence: id.sentence + 1 };
-    for (let p = id.para + 1; p < paras.length; p++) if (paras[p]!.length) return { chapter: id.chapter, para: p, sentence: 0 };
-    return null;
-  }
-
-  sentenceWords(id: SentenceId): number {
-    return countWords(this.#book.chapters[id.chapter]?.paras[id.para]?.[id.sentence] ?? '');
-  }
-
-  setGuideSentence(id: SentenceId | null): void {
-    const g = this.#guide;
-    if (g === id || (g && id && g.chapter === id.chapter && g.para === id.para && g.sentence === id.sentence)) return;
-    this.#guide = id;
-    this.paintNow();
-  }
-
-  /** The lit sentence, if guiding. */
-  get guideSentence(): SentenceId | null {
-    return this.#guide;
-  }
-
-  scrollSentenceToCentre(id: SentenceId, ms: number, done: () => void): () => void {
-    cancelAnimationFrame(this.#anim);
-    this.#anim = 0;
-    const first = this.#lines.findIndex((l) => inSentence(l, id));
-    if (first < 0) { done(); return () => {}; }
-    let last = first;
-    while (last + 1 < this.#lines.length && inSentence(this.#lines[last + 1]!, id)) last++;
-    const centre = (this.#top[first]! + this.#top[last]! + this.#lh) / 2;
-    const from = this.#scroller.scrollTop;
-    const to = Math.max(0, centre - this.#H / 2);
-    const t0 = performance.now();
-    const frame = (now: number): void => {
-      const k = ms > 0 ? Math.min(1, (now - t0) / ms) : 1;
-      this.#scroller.scrollTop = from + (to - from) * ease(k);
-      if (k < 1) { this.#anim = requestAnimationFrame(frame); return; }
-      this.#anim = 0;
-      done();
-    };
-    this.#anim = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(this.#anim); this.#anim = 0; };
-  }
-
   /**
    * Scrolls line `i` so its vertical centre is the viewport centre, over `ms`, then calls `done`.
    * The position comes from the line table (`#top`), never from a per-frame layout read. A new
@@ -750,6 +690,7 @@ export class ReaderEngine implements GuideHost {
     clearTimeout(this.#jobTimer);
     clearTimeout(this.#annTimer);
     this.#annQueue = [];
+    this.#deferred = [];
     this.#prepared.clear();
     this.#content.remove();
     this.#dropLayer.remove();
@@ -811,16 +752,20 @@ export class ReaderEngine implements GuideHost {
    * Queues every paragraph of `chapters` for decoration, nearest to the band centre first, and
    * runs the first slice now (what is on screen). `replace` drops what was queued before.
    */
-  #queueDecorate(chapters: number[], replace: boolean): void {
+  #queueDecorate(chapters: number[], replace: boolean, deferVisible = false): void {
     const centre = this.#lines.length ? this.#lineAt(this.#scroller.scrollTop + this.#H / 2) : 0;
     const items: { chapter: number; lines: LineMeta[]; i: number; j: number; d: number }[] = [];
+    if (deferVisible) this.#deferred = [];
     for (const chapter of chapters) {
       const lines = this.#blocks.get(chapter)?.lines;
       if (!lines) continue;
       for (let i = 0; i < lines.length;) {
         let j = i + 1;
         while (j < lines.length && lines[j]!.para === lines[i]!.para) j++;
-        if (lines[i]!.para >= 0) items.push({ chapter, lines, i, j, d: Math.abs((this.#index.get(lines[i]!.el) ?? 1e9) - centre) });
+        if (lines[i]!.para >= 0) {
+          if (deferVisible && !this.#offWindow(lines, i, j)) this.#deferred.push({ chapter, lines, i, j });
+          else items.push({ chapter, lines, i, j, d: Math.abs((this.#index.get(lines[i]!.el) ?? 1e9) - centre) });
+        }
         i = j;
       }
     }
@@ -853,6 +798,7 @@ export class ReaderEngine implements GuideHost {
   #onIdle = (): void => {
     if (this.#gapHost) return; // the drawer is open: keep the DOM still until it closes
     this.#syncWindow();
+    this.#flushDeferred();
     this.#cb.onAnchor?.(this.currentAnchor());
   };
 
@@ -871,6 +817,29 @@ export class ReaderEngine implements GuideHost {
     }
     for (const idx of this.#prepared.keys()) if (!want.includes(idx)) this.#prepared.delete(idx);
     this.#scheduleLayout(c);
+  }
+
+  /** Lines `[i, j)` of a mounted chapter lie entirely outside `[scrollTop − H, scrollTop + 2H]`. */
+  #offWindow(lines: LineMeta[], i: number, j: number): boolean {
+    const a = this.#index.get(lines[i]!.el);
+    const b = this.#index.get(lines[j - 1]!.el);
+    if (a === undefined || b === undefined) return true;
+    return outsideWindow(this.#top[a]!, this.#top[b]! + this.#lh, this.#scroller.scrollTop, this.#H);
+  }
+
+  /** At a scroll pause, deferred paragraphs that have left the window take the current annotator. */
+  #flushDeferred(): void {
+    if (!this.#deferred.length) return;
+    const ready: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+    const wait: { chapter: number; lines: LineMeta[]; i: number; j: number }[] = [];
+    for (const q of this.#deferred) {
+      if (this.#blocks.get(q.chapter)?.lines !== q.lines) continue; // relaid: already decorated afresh
+      (this.#offWindow(q.lines, q.i, q.j) ? ready : wait).push(q);
+    }
+    this.#deferred = wait;
+    if (!ready.length) return;
+    this.#annQueue.push(...ready);
+    if (!this.#annTimer) this.#annTimer = window.setTimeout(this.#decorateSlice, 0);
   }
 
   #wanted(c: number): number[] {

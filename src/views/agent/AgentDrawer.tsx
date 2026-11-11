@@ -196,7 +196,9 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
                 <path d="M2.2 2.6v2.6h2.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M8 5.2V8l2 1.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>历史 {sessions.length}</span><span className="ag-dot">·</span><span className="ag-meta-ch">{current?.chapterLabel ?? page.chapterTitle}</span>
+              {sessions.length === 0
+                ? <span>新对话</span> /* no 「历史 0」 before the first conversation (review S12) */
+                : <><span>历史 {sessions.length}</span><span className="ag-dot">·</span><span className="ag-meta-ch">{current?.chapterLabel ?? page.chapterTitle}</span></>}
             </span>
             <span className="ag-title">
               <span className="ag-title-text">{title}</span>
@@ -241,7 +243,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
                     <button type="button" className="ag-retry" onClick={() => void send(shown.question)}>重试</button>
                   )}
                   {(shown.state.reason === 'no-key' || shown.state.reason === 'invalid-key') && (
-                    <AiKeyCard db={db} place="inline" initiallyEditing={shown.state.reason === 'invalid-key'} onSaved={() => void send(shown.question)} />
+                    <AiKeyCard db={db} place="inline" title="旁注需要 DeepSeek Key" initiallyEditing={shown.state.reason === 'invalid-key'} onSaved={() => void send(shown.question)} />
                   )}
                 </>
               )}
@@ -259,7 +261,7 @@ export function AgentDrawer({ db, book, engine, open, panelRef, attachment, onAt
         <div className="ag-key" data-noswipe="">
           <p className="ag-error" role="status">{FAILURE['no-key']}</p>
           <p className="ag-key-q">{held}</p>
-          <AiKeyCard db={db} place="inline" onSaved={() => { if (openRef.current && heldRef.current) void send(heldRef.current); }} />
+          <AiKeyCard db={db} place="inline" title="旁注需要 DeepSeek Key" onSaved={() => { if (openRef.current && heldRef.current) void send(heldRef.current); }} />
         </div>
       ) : attachment ? (
         <div className="ag-attach" data-noswipe="">

@@ -86,3 +86,13 @@ export function lineRange(line: HTMLElement, a: number, b: number): Range {
   }
   return r;
 }
+
+/**
+ * True if a paragraph spanning `[top, bottom)` (content y) lies entirely outside the window the reader
+ * can reach without a long scroll: one viewport above the screen to one below it,
+ * `[scrollTop − H, scrollTop + 2H]`. New predicted footnotes are applied there first, so nothing
+ * changes under the reader's eyes (review M1).
+ */
+export function outsideWindow(top: number, bottom: number, scrollTop: number, H: number): boolean {
+  return bottom <= scrollTop - H || top >= scrollTop + 2 * H;
+}

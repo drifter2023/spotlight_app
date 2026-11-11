@@ -39,7 +39,7 @@ test('P-04: 撤回 on a predicted word removes its footnote for good', async ({ 
   await expect.poll(() => noteUnder(page, 'levity'), { timeout: 10_000 }).not.toBeNull();
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId('drawer')).toHaveAttribute('data-state', 'ready');
-  await page.getByRole('button', { name: '撤回生词标记' }).click();
+  await page.getByRole('button', { name: '标记为认识的词' }).click();
   await expect(page.getByTestId('drawer')).toHaveCount(0);
   await expect.poll(() => noteUnder(page, 'levity')).toBeNull();
 

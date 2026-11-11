@@ -28,7 +28,7 @@ test('G-01: the key form checks a key before saving it, and the saved key surviv
   const d = await dropInBand(page, 0, 0);
   await page.mouse.click(d.x, d.y);
   await page.getByRole('button', { name: '填写 Key' }).click();
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
+  const card = page.getByRole('region', { name: '语法分析需要 DeepSeek Key' });
   await expect(card.locator('.ai-status')).toHaveText('未设置');
 
   const input = card.getByLabel('DeepSeek API Key');

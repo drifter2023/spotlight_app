@@ -7,6 +7,16 @@ async function open(page: Page) {
   await ready(page);
 }
 const drawer = (page: Page) => page.getByTestId('drawer');
+/** Centre of the highlighted word's own text, once its footnote is in (opening a word footnotes it and re-decorates the line). */
+async function hlPoint(page: Page) {
+  await expect(page.locator('.rd-hl .rd-fn')).toHaveCount(1);
+  return page.evaluate(() => {
+    const r = document.createRange();
+    r.selectNodeContents(document.querySelector('.rd-hl')!.firstChild!);
+    const b = r.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  });
+}
 
 test('R-04: tap to drawer ≤ 100 ms; lemma, IPA, POS and gloss shown', async ({ page }) => {
   await open(page);
@@ -20,6 +30,8 @@ test('R-04: tap to drawer ≤ 100 ms; lemma, IPA, POS and gloss shown', async ({
   await expect(page.locator('.wd-ph')).toHaveText(/^\/.+\/$/);
   await expect(page.locator('.wd-pos')).toHaveText(/^v/);
   await expect(page.locator('.wd-def')).not.toBeEmpty();
+  // The first sense leads in full weight; any others follow quieter on the same line (review S4).
+  await expect(page.locator('.wd-def b')).not.toBeEmpty();
   const ms = await page.evaluate(() => window.__spotlightTapMs!);
   expect(ms).toBeGreaterThan(0);
   // 100 ms is a device budget (R-04); a shared CI runner measured 198 ms in WebKit.
@@ -44,12 +56,15 @@ test('R-05: same word closes; another word closes first, then opens; a tap elsew
   const a = await wordInBand(page, 'advice');
   await page.mouse.click(a.x, a.y);
   await expect(page.locator('.wd-word')).toHaveText('advice');
-  await page.mouse.click(a.x, a.y);
+  const a2 = await hlPoint(page);
+  await page.mouse.click(a2.x, a2.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'closing');
   await expect(drawer(page)).toHaveCount(0);
 
-  await page.mouse.click(a.x, a.y);
+  const a3 = await wordInBand(page, 'advice');
+  await page.mouse.click(a3.x, a3.y);
   await expect(page.locator('.wd-word')).toHaveText('advice');
+  await hlPoint(page);
   const b = await page.evaluate(() => {
     const line = [...document.querySelectorAll<HTMLElement>('.rd-line[data-p]')].find((l) => /\bfather\b/.test(l.textContent ?? ''))!;
     const w = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
@@ -130,38 +145,35 @@ test('R-05: a drawer opened low on the screen is scrolled up to stay 70 px above
   expect(bottom).toBeLessThanOrEqual(vp.height - 70 + 8 + 1);
 });
 
-test('R-06 and R-09: a footnote follows a saved lemma, survives a reload, and 已存 sticks', async ({ page }) => {
+test('R-06 and R-09: a lookup footnotes its word at once, except a common word; the footnote survives a reload, and 已存 sticks', async ({ page }) => {
   await open(page);
   const adviceNote = page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn');
   const a = await wordInBand(page, 'advice');
   await page.mouse.click(a.x, a.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
-  // Let the 330 ms open finish: clicking a half-revealed button makes Playwright scroll it into view.
-  await page.waitForTimeout(450);
-  await expect(page.getByRole('button', { name: '保存' })).toBeVisible();
-  await expect(adviceNote).toHaveCount(0); // a lookup alone leaves no footnote
-
-  const hl0 = (await page.locator('.rd-hl').boundingBox())!;
-  await page.mouse.click(hl0.x + hl0.width / 2, hl0.y + hl0.height / 2);
-  await expect(drawer(page)).toHaveCount(0);
-  await expect(adviceNote).toHaveCount(0); // closing without 保存 leaves none
-
-  const again = await wordInBand(page, 'advice');
-  await page.mouse.click(again.x, again.y);
-  await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
-  await page.waitForTimeout(450);
-  await expect(page.getByRole('button', { name: '保存' })).toBeVisible();
+  // Owner decision 2026-11-11: opening the word is enough; no 保存 needed.
+  await expect(adviceNote.first()).toHaveText('忠告');
+  await page.waitForTimeout(450); // let the 330 ms open finish before tapping inside the drawer
   await page.getByRole('button', { name: '保存' }).click();
   await expect(page.getByRole('button', { name: '已存' })).toBeVisible();
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready'); // Save does not close the drawer
-  await expect(adviceNote.first()).toHaveText('忠告');
 
   await page.waitForTimeout(700);
   const hl = (await page.locator('.rd-hl').boundingBox())!;
   await page.mouse.click(hl.x + hl.width / 2, hl.y + hl.height / 2);
   await expect(drawer(page)).toHaveCount(0);
-  await expect(adviceNote.first()).toHaveText('忠告');
+  await expect(adviceNote.first()).toHaveText('忠告'); // closing keeps it
 
+  // A common word (one of the ~200 most frequent) opens its drawer but gets no footnote.
+  const my = await wordInBand(page, 'my');
+  await page.mouse.click(my.x, my.y);
+  await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
+  await page.waitForTimeout(600);
+  await expect(page.locator('.rd-w', { hasText: /^my$/ }).locator('.rd-fn')).toHaveCount(0);
+  await page.mouse.click(12, 600);
+  await expect(drawer(page)).toHaveCount(0);
+
+  await page.waitForTimeout(600); // user.db persists to IndexedDB after a 300 ms debounce
   await page.reload();
   await ready(page);
   await wordInBand(page, 'advice');
@@ -171,15 +183,14 @@ test('R-06 and R-09: a footnote follows a saved lemma, survives a reload, and �
   await expect(page.getByRole('button', { name: '已存' })).toBeVisible();
 });
 
-test('Undo: 撤回 forgets a mistaken word; its footnotes are gone, also after a reload', async ({ page }) => {
+test('Undo: 认识 forgets a mistaken word; its footnotes are gone, also after a reload', async ({ page }) => {
   await open(page);
   const a = await wordInBand(page, 'advice');
   await page.mouse.click(a.x, a.y);
   await expect(drawer(page)).toHaveAttribute('data-state', 'ready');
+  await expect(page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn').first()).toHaveText('忠告'); // the lookup footnotes it
   await page.waitForTimeout(450);
-  await page.getByRole('button', { name: '保存' }).click(); // the footnote follows 保存; 撤回 clears it
-  await expect(page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn').first()).toHaveText('忠告');
-  await page.getByRole('button', { name: '撤回生词标记' }).click();
+  await page.getByRole('button', { name: '标记为认识的词' }).click();
   await expect(drawer(page)).toHaveCount(0);
   await expect(page.locator('.rd-hl')).toHaveCount(0);
   await expect(page.locator('.rd-w', { hasText: 'advice' })).toHaveCount(0);

@@ -10,11 +10,13 @@ type Note = { tone: 'error' | 'quiet'; text: string } | null;
  * Saved only after `checkKey` (`GET /models`) accepts it. `place` is where it sits:
  * the paper card, inline in the Agent drawer, or on the grammar drawer's leather.
  */
-export function AiKeyCard({ db, onSaved, place = 'card', initiallyEditing = false }: {
+export function AiKeyCard({ db, onSaved, place = 'card', initiallyEditing = false, title = 'AI 语法分析' }: {
   db: Db;
   /** After a key has been checked and stored. */
   onSaved?: () => void;
   place?: 'card' | 'inline' | 'leather';
+  /** Names the feature that asked for the key, e.g. 「旁注需要 DeepSeek Key」 (review S11). */
+  title?: string;
   /** Open the field immediately, even when a key is already stored (replacing an invalid one). */
   initiallyEditing?: boolean;
 }) {
@@ -55,9 +57,9 @@ export function AiKeyCard({ db, onSaved, place = 'card', initiallyEditing = fals
   };
 
   return (
-    <section className="ai-card" data-place={place} aria-label="AI 语法分析">
+    <section className="ai-card" data-place={place} aria-label={title}>
       <div className="ai-head">
-        <span className="eyebrow">AI 语法分析</span>
+        <span className="eyebrow">{title}</span>
         <span className="ai-status" data-state={saved ? 'on' : 'off'}>{saved ? `已连接 ${maskKey(saved)}` : '未设置'}</span>
       </div>
       {open ? (

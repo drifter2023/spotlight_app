@@ -210,6 +210,41 @@ describe('ReaderEngine', () => {
     expect(all).toBeGreaterThan(0);
   });
 
+  it('review M1: a deferred annotator leaves lines near the screen alone until they leave the window', async () => {
+    const { el, e } = await open({}, { chapters: 3 });
+    const first = (_c: number, _p: number, _para: string[], text: string) => {
+      const m = /\S+/.exec(text.slice(1))!;
+      return [{ start: m.index + 1, end: m.index + 1 + m[0].length, text: '旧' }];
+    };
+    e.setAnnotator(first);
+    await expect.poll(() => el.querySelectorAll('.rd-fn').length, { timeout: 3000 }).toBeGreaterThan(0);
+    await sleep(300); // every slice done
+    const onScreen = () => {
+      const box = el.getBoundingClientRect();
+      return Array.from(el.querySelectorAll<HTMLElement>('.rd-fn')).filter((f) => {
+        const b = f.getBoundingClientRect();
+        return b.bottom > box.top && b.top < box.bottom;
+      });
+    };
+    const shown = onScreen().map((f) => f.textContent);
+    expect(shown.length).toBeGreaterThan(0);
+
+    e.setAnnotator((c, p, para, text) => first(c, p, para, text).map((n) => ({ ...n, text: '新' })), { deferVisible: true });
+    await sleep(300);
+    // Nothing changed under the reader's eyes.
+    expect(onScreen().map((f) => f.textContent)).toEqual(shown);
+    // Far paragraphs already carry the new gloss.
+    expect(Array.from(el.querySelectorAll('.rd-fn')).some((f) => f.textContent === '新')).toBe(true);
+
+    // Scroll three viewports away, pause, and back: the old lines now show the new gloss.
+    const start = el.scrollTop;
+    el.scrollTop = start + el.clientHeight * 3;
+    await sleep(400);
+    el.scrollTop = start;
+    await sleep(400);
+    expect(onScreen().every((f) => f.textContent === '新')).toBe(true);
+  });
+
   it('the drawer reaches the screen edges: its chapter does not clip it (content-visibility)', async () => {
     const { el, e } = await open();
     const line = Array.from(el.querySelectorAll<HTMLElement>('.rd-line')).findIndex((l) => mid(l) > 400);

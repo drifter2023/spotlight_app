@@ -103,7 +103,7 @@ export function useTextSelection(opts: {
         setPhase('handle');
         return;
       }
-      if (t.closest('.rd-ask, .wd, .sheet, .sheet-scrim, .rd-back, .rd-top, .rd-capsule, .rd-guide, .gd-bar')) return;
+      if (t.closest('.rd-ask, .wd, .sheet, .sheet-scrim, .rd-back, .rd-top, .rd-capsule')) return;
       press = { x: e.clientX, y: e.clientY, id: e.pointerId };
       clearTimeout(timer);
       timer = window.setTimeout(() => {

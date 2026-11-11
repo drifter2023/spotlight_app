@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { createPortal } from 'react-dom';
 import { lightHaptic } from '../app/haptics.ts';
 import { loadDict } from '../app/dict.ts';
-import { footnoteAnnotator } from '../core/annot/footnotes.ts';
+import { footnoteAnnotator, isCommonLemma } from '../core/annot/footnotes.ts';
 import { forgetLemma, isSaved, recordLookup, savedLemmas, seenLemmas, setSaved } from '../core/annot/lookups.ts';
 import type { Db } from '../core/db/types.ts';
 import type { DictService, LookupResult } from '../core/dict/service.ts';
 import { GrammarService, type GrammarRun, type RunState } from '../core/grammar/service.ts';
 import { logMetric } from '../core/metrics/metrics.ts';
-import { MOTION } from '../core/motion.ts';
+import { ease, MOTION } from '../core/motion.ts';
 import type { PrefsStore } from '../core/prefs/prefs.ts';
 import type { EngineBook, ReaderEngine, SentenceHit, WordHit } from '../core/reader/engine.ts';
 import { bookLemmas, VocabModel } from '../core/vocab/model.ts';
@@ -32,7 +32,7 @@ const SCROLL_LOCK_MS = MOTION.drawerClose;
 const KEEP_BOTTOM = 70;
 /** Beta metric: does the reader scroll again within 10 s of closing a drawer? */
 const RESCROLL_MS = 10000;
-/** A soft word scrolls to the viewport centre, then its drawer opens (same length as a 带读 step). */
+/** A soft word scrolls to the viewport centre, then its drawer opens. */
 const REACH_MS = 600;
 
 export interface WordLookup {
@@ -78,6 +78,8 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const recording = useRef<Promise<void>>(Promise.resolve());
   const timers = useRef<number[]>([]);
   const closedAt = useRef<{ at: number; timer: number } | null>(null);
+  /** How far keep-on-screen pushed the page for the open drawer: from where, to where (review M2). */
+  const pushed = useRef<{ host: HTMLElement; from: number; target: number } | null>(null);
   /** One service per open book, so reopening a sentence that is still streaming joins its run. */
   const grammar = useMemo(() => new GrammarService(db), [db]);
   /** Stops following the open grammar run (its updates and its drawer's growth). */
@@ -87,16 +89,30 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   /** Saved lemmas and predicted words (P-03). A lookup alone is not a footnote; 保存 adds the lemma. Predictions do not require 保存. */
-  const footnoted = (): Set<string> => new Set([...savedRef.current, ...predictedRef.current]);
-  /** Unsaved lookups in this book. They are not force-footnoted; a difficulty prediction still shows, and 保存 adds the rest. */
+  const footnoted = (): Set<string> => new Set([...noted(), ...predictedRef.current]);
+  /**
+   * The reader's own footnotes: every lemma they looked up, except the ~200 most common words (a tap on
+   * "is" or "so" is usually a slip), plus anything they pressed 保存 for (owner decision 2026-11-11).
+   */
+  const noted = (): Set<string> => {
+    const out = new Set(savedRef.current);
+    const dict = dictRef.current;
+    if (dict) for (const l of seenRef.current) if (!isCommonLemma(dict, l)) out.add(l);
+    return out;
+  };
+  /** Unsaved lookups in this book, for the predictor (they count as unknown words). */
   const unsavedLookups = (): Set<string> => {
     const out = new Set<string>();
     for (const l of seenRef.current) if (!savedRef.current.has(l)) out.add(l);
     return out;
   };
-  const applyFootnotes = () => {
+  /**
+   * `later`: a re-prediction after a lookup or 认识 (formerly 撤回). Lines on and near the screen keep their footnotes
+   * until a scroll takes them out of view, so glosses never come and go under the reader (review M1).
+   */
+  const applyFootnotes = (later = false) => {
     const dict = dictRef.current;
-    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, savedRef.current, predictedRef.current));
+    if (dict) engine.current?.setAnnotator(footnoteAnnotator(dict, noted(), predictedRef.current), { deferVisible: later });
   };
   /** Re-predicts after the model or the level changed; true if the set moved. */
   const repredict = (): boolean => {
@@ -159,7 +175,37 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const scroller = engine.current?.scroller;
     if (!scroller || !host.isConnected) return;
     const over = host.getBoundingClientRect().bottom - (scroller.getBoundingClientRect().bottom - KEEP_BOTTOM);
-    if (over > 8) scroller.scrollTo({ top: scroller.scrollTop + over, behavior: 'smooth' });
+    if (over <= 8) return;
+    const target = Math.min(scroller.scrollHeight - scroller.clientHeight, scroller.scrollTop + over);
+    const prev = pushed.current;
+    pushed.current = { host, from: prev?.host === host ? prev.from : scroller.scrollTop, target };
+    scroller.scrollTo({ top: target, behavior: 'smooth' });
+  };
+
+  /**
+   * As a drawer that keep-on-screen pushed up closes, the page eases back to where it was, so the band
+   * holds the sentence the reader was in again (review M2). A scroll gesture closes the drawer and
+   * clears the push first, so this only runs after a tap; any scroll that is not ours stops it.
+   */
+  const settleBack = (host: HTMLElement) => {
+    const push = pushed.current;
+    pushed.current = null;
+    const scroller = engine.current?.scroller;
+    if (!push || push.host !== host || !scroller) return;
+    scroller.scrollTop = scroller.scrollTop; // stops a keep-on-screen smooth scroll still under way
+    const start = scroller.scrollTop;
+    if (Math.abs(start - push.from) < 1) return;
+    const t0 = performance.now();
+    let last = start;
+    const step = () => {
+      if (Math.abs(scroller.scrollTop - last) > 1) return; // someone else scrolled
+      const k = Math.min(1, (performance.now() - t0) / MOTION.drawerClose);
+      last = start + (push.from - start) * ease(k);
+      scroller.scrollTop = last;
+      last = scroller.scrollTop;
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   };
 
   const resolve = (hit: WordHit): Pick<Pop, 'state' | 'result' | 'predicted'> => {
@@ -170,7 +216,10 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     return { state: 'ready', result: r, predicted: predictedRef.current.has(r.lemma) && !seenRef.current.has(r.lemma) };
   };
 
-  /** A lookup writes a row, trains the model and logs the metric. The footnote waits for 保存. */
+  /**
+   * A lookup writes a row, trains the model and logs the metric. Unless the word is one of the most
+   * common, its footnote appears at once, everywhere in the book, as the drawer finishes opening.
+   */
   const record = (p: Pop) => {
     const r = p.result;
     if (!r || p.target.kind !== 'word') return;
@@ -178,8 +227,13 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     const predicted = p.predicted;
     if (!seenRef.current.has(r.lemma)) {
       seenRef.current.add(r.lemma);
+      const dict = dictRef.current;
+      if (dict && !isCommonLemma(dict, r.lemma)) {
+        seenDirty.current = true;
+        later(refreshFootnotes, MOTION.drawerOpen); // also if the open already finished (a slow dictionary)
+      }
       const model = modelRef.current;
-      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) seenDirty.current = true; refreshFootnotes(); });
+      if (model) void model.lookedUp(r.lemma).then(() => { if (repredict()) applyFootnotes(true); refreshFootnotes(); });
     }
     void logMetric(db, { type: 'lookup', bookId, predicted });
     recording.current = (async () => {
@@ -200,7 +254,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     })();
   };
 
-  /** A newly saved lemma gets its footnote everywhere, including under the open word. */
+  /** A newly looked-up or saved lemma gets its footnote everywhere, including under the open word. */
   const refreshFootnotes = () => {
     if (!seenDirty.current || !dictRef.current) return;
     seenDirty.current = false;
@@ -293,6 +347,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     unfollow.current?.(); // the run goes on without the drawer and still stores its answer
     setPop({ ...p, closing: true });
     trackGap(p.host, MOTION.drawerClose);
+    settleBack(p.host);
     if (closedAt.current) clearTimeout(closedAt.current.timer);
     closedAt.current = {
       at: performance.now(),
@@ -339,6 +394,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
       }
       if (p && !p.closing) {
         if (ev.cancelable) ev.preventDefault();
+        pushed.current = null; // the reader is scrolling on: do not ease the page back (review M2)
         close();
         lockUntil.current = performance.now() + SCROLL_LOCK_MS;
         return;
@@ -462,7 +518,7 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
   };
 
   /**
-   * The drawer's 撤回: this book forgets the word (rows, saved state, footnotes), then the drawer
+   * The drawer's 认识 (formerly 撤回): this book forgets the word (rows, saved state, footnotes), then the drawer
    * closes. The reader knows it, so it is never predicted again (P-04).
    */
   const undo = () => {
@@ -472,13 +528,15 @@ export function useWordLookup(engine: RefObject<ReaderEngine | null>, db: Db, bo
     if (seenRef.current.delete(lemma)) seenDirty.current = true;
     if (savedRef.current.delete(lemma)) seenDirty.current = true;
     if (predictedRef.current.delete(lemma)) seenDirty.current = true;
+    // The word's own footnote goes at once; re-predicting the others waits for the scroll (review M1).
+    refreshFootnotes();
     void logMetric(db, { type: 'undo', bookId, predicted: p.predicted });
     close();
     const model = modelRef.current;
     void recording.current.then(async () => {
       await forgetLemma(db, bookId, lemma);
       await model?.undone(lemma);
-      if (repredict()) { seenDirty.current = true; refreshFootnotes(); }
+      if (repredict()) applyFootnotes(true);
     });
   };
 

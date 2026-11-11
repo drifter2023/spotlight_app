@@ -154,7 +154,7 @@ describe('highlight and drawer gap (R-05)', () => {
     const p = wordPoint(line, 2);
     const hit = e.hitTest(p.x, p.y)!;
     e.setHighlight(hit);
-    expect(el.querySelector('.rd-hl')?.textContent).toBe(p.word);
+    expect(el.querySelector('.rd-hl')?.firstChild?.textContent).toBe(p.word);
     e.setHighlight(null);
     expect(el.querySelector('.rd-hl')).toBeNull();
   });

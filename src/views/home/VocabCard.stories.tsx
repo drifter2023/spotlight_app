@@ -5,7 +5,7 @@ import { VocabCardView } from './VocabCard.tsx';
 
 /**
  * Home → 预测生词 (M7, P-06): offers the one-minute vocabulary test until it is taken or skipped; then
- * shows the estimate, which lookups, 撤回 and reading keep correcting on the device.
+ * shows the estimate, which lookups, 认识 and reading keep correcting on the device.
  */
 const meta = {
   title: 'Home/预测生词 VocabCard',

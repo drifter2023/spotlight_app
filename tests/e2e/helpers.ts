@@ -47,6 +47,13 @@ export async function wordInBand(page: Page, word: string, nth = 0): Promise<{ x
   return pt;
 }
 
+/** Shows ‹ 书架, 目录 and Aa if they are hidden (a title-area tap would hide them if they were up). */
+export async function showChrome(page: Page) {
+  const on = await page.locator('.rd-top').evaluate((el) => el.classList.contains('rd-chrome-on'));
+  if (!on) await tapTitle(page);
+  await expect(page.locator('.rd-back')).toHaveClass(/rd-chrome-on/);
+}
+
 /** A tap in the title area (the eyebrow strip at the top): shows or hides ‹ 书架, 目录 and Aa (N-01). */
 export async function tapTitle(page: Page) {
   const vp = page.viewportSize()!;
@@ -69,7 +76,7 @@ export async function saveDeepSeekKey(page: Page, key = 'sk-e2e-good') {
   const d = await dropInBand(page, 0, 0);
   await page.mouse.click(d.x, d.y);
   await page.getByRole('button', { name: '填写 Key' }).click();
-  const card = page.getByRole('region', { name: 'AI 语法分析' });
+  const card = page.getByRole('region', { name: '语法分析需要 DeepSeek Key' });
   await card.getByLabel('DeepSeek API Key').fill(key);
   await card.getByRole('button', { name: '确认' }).click();
   await expect(page.locator('.wd-miss')).toHaveText('DeepSeek 暂时不可用，请稍后再试');

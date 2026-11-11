@@ -3,9 +3,9 @@ import type { Session } from '../app/boot.ts';
 import { devTools, exposeDevHandle } from '../app/devtools.ts';
 import { shareTextFile } from '../app/share.ts';
 import { exportMetrics, logMetric } from '../core/metrics/metrics.ts';
+import { MOTION } from '../core/motion.ts';
 import { ReaderEngine, type EngineBook } from '../core/reader/engine.ts';
 import { PositionSaver, savePosition } from '../core/reader/position.ts';
-import { Guide } from '../core/reader/guide.ts';
 import { decideTier, runProbe } from '../core/reader/probe.ts';
 import { MENU_PAD, onText, routeTap } from '../core/reader/tap.ts';
 import type { Anchor } from '../core/types.ts';
@@ -14,7 +14,6 @@ import { useAgentSwipe } from './agent/useAgentSwipe.ts';
 import { DevPanel } from './DevPanel.tsx';
 import { FpsMeter } from './FpsMeter.tsx';
 import { blurMaxFor } from '../core/prefs/prefs.ts';
-import { GuideBar } from './reader/GuideBar.tsx';
 import { ReaderChrome } from './reader/ReaderChrome.tsx';
 import { SettingsSheet } from './reader/SettingsSheet.tsx';
 import { TocSheet } from './reader/TocSheet.tsx';
@@ -25,10 +24,17 @@ import { drawerInner, useWordLookup } from './useWordLookup.tsx';
 export interface ReaderBook extends EngineBook { title: string }
 interface Props { session: Session; book: ReaderBook; initialAnchor: Anchor | null; onBack: () => void }
 
-const CHROME_IDLE_MS = 3000;
-/** While 带读 plays, its bar fades out after this long (N5). */
-const GUIDE_BAR_IDLE_MS = 3000;
+/** Idle time before the top bar and capsule fade (owner decision 2026-11-11, review O3; README said 3 s). */
+const CHROME_IDLE_MS = 5000;
+/** A tap on the capsule's place this soon after it faded still counts as a tap on the capsule. */
+const DOCK_GRACE_MS = 400;
+
+function within(r: DOMRect, x: number, y: number, pad: number): boolean {
+  return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+}
 const MIN_SESSION_MS = 5000;
+/** The first-run hint stays this long, then fades (review O2). */
+const HINT_MS = 6000;
 
 export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -40,10 +46,14 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
   const saverRef = useRef<PositionSaver | null>(null);
   const [prefs, setPrefs] = useState(session.prefs.get());
   const [probing, setProbing] = useState(false);
+  /** The one-line first-run hint under the eyebrow: shown once, for the first book (review O2). */
+  const [hint, setHint] = useState<'off' | 'on' | 'fading'>('off');
   const [chrome, setChrome] = useState(false);
   const [sheet, setSheet] = useState<'settings' | 'toc' | null>(null);
   const [chapter, setChapter] = useState(initialAnchor?.chapter ?? 0);
   const chromeTimer = useRef(0);
+  /** Where the capsule was when the idle timer faded it, and when (review S3). */
+  const fadedDock = useRef<{ at: number; rect: DOMRect } | null>(null);
   const scrimDown = useRef<{ x: number; y: number } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -60,12 +70,6 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     if (open) selectionRef.current.clear(); // a left swipe cancels the selection (and opens the drawer)
     else setAttachment(null); // closing drops the attachment: the next left swipe shows 当前句 (C3)
   });
-  /** 带读 (N4): the guide is created with the engine; React only shows whether it plays. */
-  const guideRef = useRef<Guide | null>(null);
-  const [guiding, setGuiding] = useState(false);
-  const [barFaded, setBarFaded] = useState(false);
-  const guideFill = useRef<HTMLElement | null>(null);
-  const pctNow = useRef(1);
   const lookup = useWordLookup(engineRef, session.db, book, session.prefs);
   const lookupRef = useRef(lookup);
   lookupRef.current = lookup;
@@ -102,8 +106,6 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       onProgress: (p) => {
         chapterRef.current!.textContent = p.chapterTitle;
         pctRef.current!.textContent = `${p.pct}%`;
-        pctNow.current = p.pct;
-        if (guideFill.current) guideFill.current.style.width = `${p.pct}%`; // the 带读 bar: same source as the eyebrow
         pct = p.pct;
         if (startWords < 0) { startWords = p.words; maxWords = p.words; }
         maxWords = Math.max(maxWords, p.words);
@@ -114,16 +116,13 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       onSelection: () => selectionRef.current.refresh(),
     });
     engineRef.current = engine;
-    const guide = new Guide(engine, () => session.prefs.get().guideSpeed, (playing) => setGuiding(playing));
-    guideRef.current = guide;
-    exposeDevHandle({ engine, prefs: session.prefs, guide });
+    exposeDevHandle({ engine, prefs: session.prefs });
     const unsubscribe = session.prefs.subscribe((p) => {
-      if (p.theme !== 'night') guide.pause('theme'); // 带读 is a 夜读 feature
       engine.setPrefs(p);
       setPrefs(p);
     });
     const onHide = () => {
-      if (document.visibilityState === 'hidden') { guide.pause('hidden'); void saver.flush(); endSession(); }
+      if (document.visibilityState === 'hidden') { void saver.flush(); endSession(); }
       else visibleSince = performance.now();
     };
     const onPageHide = () => { void saver.flush(); };
@@ -131,21 +130,34 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     window.addEventListener('pagehide', onPageHide);
 
     let cancelled = false;
+    const hintTimers: number[] = [];
+    /** Once per install: the hint shows after the page is ready and is marked shown at once. */
+    const firstHint = () => {
+      if (cancelled || session.prefs.get().hinted) return;
+      void session.prefs.set('hinted', true);
+      setHint('on');
+      hintTimers.push(window.setTimeout(() => setHint('fading'), HINT_MS));
+      hintTimers.push(window.setTimeout(() => setHint('off'), HINT_MS + MOTION.chrome));
+    };
     void engine.mount(initialAnchor).then(async () => {
-      if (cancelled || session.prefs.get().tier !== null) return;
-      const forced = (window as { __forceTier?: 'full' | 'fallback' }).__forceTier; // e2e only
-      if (forced) { await session.prefs.set('tier', forced); return; }
-      setProbing(true);
-      const result = await runProbe(engine);
       if (cancelled) return;
-      await session.prefs.set('tier', decideTier(result));
-      setProbing(false);
+      if (session.prefs.get().tier === null) {
+        const forced = (window as { __forceTier?: 'full' | 'fallback' }).__forceTier; // e2e only
+        if (forced) await session.prefs.set('tier', forced);
+        else {
+          setProbing(true);
+          const result = await runProbe(engine);
+          if (cancelled) return;
+          await session.prefs.set('tier', decideTier(result));
+          setProbing(false);
+        }
+      }
+      firstHint();
     });
 
     return () => {
       cancelled = true;
-      guide.pause('gone');
-      guideRef.current = null;
+      hintTimers.forEach(clearTimeout);
       unsubscribe();
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
@@ -156,31 +168,17 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
     };
   }, [session, book, initialAnchor]);
 
-  // 带读 pauses whenever a sheet or the Agent drawer is open (N4 → Pause on); nothing resumes it.
-  useEffect(() => { if (sheet || agentOpen) guideRef.current?.pause('overlay'); }, [sheet, agentOpen]);
-  // While it plays, the bar fades after 3 s; paused, it stays (N5).
-  useEffect(() => {
-    setBarFaded(false);
-    if (!guiding) return;
-    const t = window.setTimeout(() => setBarFaded(true), GUIDE_BAR_IDLE_MS);
-    return () => clearTimeout(t);
-  }, [guiding]);
-  /** Any touch on the page (or a wheel) pauses 带读; the bar's own controls do not. Tap rules then run as usual. */
-  const pauseOnTouch = (e: { target: EventTarget | null }) => {
-    const g = guideRef.current;
-    if (g?.playing && !(e.target instanceof Element && e.target.closest('.gd-bar, .rd-guide'))) g.pause('touch');
-  };
-  const fillRef = (el: HTMLElement | null) => {
-    guideFill.current = el;
-    if (el) el.style.width = `${pctNow.current}%`;
-  };
-
   // Chrome: shown by a tap in the title area, on blank space or the page edge; hidden by the same tap again,
-  // a tap on text, after 3 s idle or when scrolling starts.
+  // a tap on text, after 5 s idle or when scrolling starts.
   const showChrome = (on: boolean) => {
     clearTimeout(chromeTimer.current);
     setChrome(on);
-    if (on) chromeTimer.current = window.setTimeout(() => setChrome(false), CHROME_IDLE_MS);
+    fadedDock.current = null;
+    if (on) chromeTimer.current = window.setTimeout(() => {
+      const dock = shellRef.current?.querySelector('.rd-dock');
+      fadedDock.current = dock ? { at: performance.now(), rect: dock.getBoundingClientRect() } : null;
+      setChrome(false);
+    }, CHROME_IDLE_MS);
   };
   useEffect(() => {
     const el = scrollRef.current;
@@ -212,6 +210,13 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       lookup.onTap(e.clientX, e.clientY, e.timeStamp, e.clientY - box.top < menuH);
       return;
     }
+    // A tap aimed at 目录 / Aa that lands just after the idle fade brings the capsule back instead of
+    // opening the word under it (review S3).
+    const faded = fadedDock.current;
+    if (!chrome && faded && performance.now() - faded.at < DOCK_GRACE_MS && within(faded.rect, e.clientX, e.clientY, 8)) {
+      showChrome(true);
+      return;
+    }
     if (lookup.onTap(e.clientX, e.clientY, e.timeStamp)) { if (chrome) showChrome(false); return; }
     // The bottom edge: the text there fades under the mask (in 夜读 the mask is off and only the margins count).
     const mask = maskBottomRef.current!.getBoundingClientRect();
@@ -226,7 +231,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
 
   const vars = { '--focus-pct': prefs.focusPct, '--blur-max': `${blurMaxFor(prefs)}px` } as CSSProperties;
   return (
-    <div ref={shellRef} className="rd-shell" onPointerDownCapture={pauseOnTouch} onWheelCapture={pauseOnTouch}>
+    <div ref={shellRef} className="rd-shell">
     <AgentDrawer db={session.db} book={book} engine={engineRef} open={agentOpen} panelRef={panelRef}
       attachment={attachment} onAttachment={setAttachment} />
     <div ref={pageRef} className={prefs.focusBlur ? 'rd-page' : 'rd-page rd-clear'} style={vars} onClick={onTap}>
@@ -247,25 +252,12 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
       </div>
       {lookup.drawer}
       {selection.ui}
-      {/* 纸白 keeps the bar, and it steps aside while the title and capsule are up.
-          夜读 has only the play button beside the capsule. */}
-      {prefs.theme !== 'night' && !chrome && (
-        <GuideBar playing={guiding} speed={prefs.guideSpeed} faded={guiding && barFaded} fillRef={fillRef}
-          onPlay={() => { showChrome(false); guideRef.current?.play(); }}
-          onPause={() => guideRef.current?.pause('user')}
-          onSpeed={(v) => void session.prefs.set('guideSpeed', v)} />
-      )}
       <ReaderChrome
         visible={chrome && !sheet}
         title={book.title}
         onBack={back}
         onToc={() => { showChrome(false); setSheet('toc'); }}
         onSettings={() => { showChrome(false); setSheet('settings'); }}
-        guide={prefs.theme === 'night' ? {
-          playing: guiding,
-          onPlay: () => { showChrome(true); guideRef.current?.play(); },
-          onPause: () => guideRef.current?.pause('user'),
-        } : null}
       />
       {sheet && (
         <div
@@ -291,6 +283,7 @@ export function ReaderView({ session, book, initialAnchor, onBack }: Props) {
         onPick={(idx) => { setSheet(null); engineRef.current?.scrollToChapter(idx); }}
       />
       {probing && <p className="rd-probing">正在适配这台设备…</p>}
+      {hint !== 'off' && <p className="rd-hint" data-on={hint === 'on'}>点清晰的词查义 · 句末的小滴看语法 · 向左滑问旁注</p>}
       {devTools && <FpsMeter engine={engineRef} />}
       {devTools && <DevPanel prefs={session.prefs} />}
       </div>

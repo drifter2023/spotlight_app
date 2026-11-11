@@ -26,22 +26,13 @@ function look(d: number, sharpAll: boolean, lit = false): CSSProperties {
   return { filter: `blur(${(7 * t).toFixed(1)}px)`, opacity: 1 - 0.55 * t };
 }
 
-/** While 带读 plays: only the lit lines are sharp and coloured; the rest one step deeper. */
-function guided(d: number, lit: boolean): CSSProperties {
-  if (lit) return look(0, false, true);
-  const t = Math.min(1, Math.max(0, d) / 6 + 0.18);
-  return { filter: `blur(${(9 * t).toFixed(1)}px)`, opacity: 1 - 0.92 * t };
-}
-
 /**
  * A still reader page (4a): eyebrow, masks and Gatsby's opening lines, as the engine lays them out.
  * Lines `band[0]..band[1]` are sharp; `gapAfter` opens a drawer host under that line (its `children`);
  * `hl` marks one word on a line, as the reader does while that word's drawer is open.
  */
-export function ReaderPage({ band = [0, 7], gapAfter, hl, sharp = false, lit, children, overlay, style }: {
+export function ReaderPage({ band = [0, 7], gapAfter, hl, sharp = false, children, overlay, style }: {
   band?: [number, number]; gapAfter?: number; hl?: { line: number; word: string }; sharp?: boolean;
-  /** 带读: the lit sentence's lines (first, last). */
-  lit?: [number, number];
   children?: ReactNode; overlay?: ReactNode; style?: CSSProperties;
 }) {
   return (
@@ -54,7 +45,7 @@ export function ReaderPage({ band = [0, 7], gapAfter, hl, sharp = false, lit, ch
             const d = i < band[0] ? band[0] - i : i - band[1];
             const line = !text ? <div key={i} className="rd-blank" /> : (
               <div key={i} className={i === gapAfter ? 'rd-line rd-gapline' : 'rd-line'}
-                style={lit ? guided(d, i >= lit[0] && i <= lit[1]) : look(d, sharp)}>
+                style={look(d, sharp)}>
                 {hl && hl.line === i ? withHighlight(text, hl.word) : text}
               </div>
             );

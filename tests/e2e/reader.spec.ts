@@ -73,7 +73,7 @@ test('R-07: a reload restores the same paragraph into the band', async ({ page }
   expect([after.chapter, after.para]).toEqual([before.chapter, before.para]);
 });
 
-test('chrome: a tap in the title area shows the top bar and capsule; they hide after 3 s idle and on scroll', async ({ page }) => {
+test('chrome: a tap in the title area shows the top bar and capsule; they hide after 5 s idle (review O3) and on scroll', async ({ page }) => {
   await fullTier(page);
   await page.goto('/?book=gatsby');
   await ready(page);
@@ -82,6 +82,8 @@ test('chrome: a tap in the title area shows the top bar and capsule; they hide a
   await expect(bar).toHaveClass(/rd-chrome-on/);
   await expect(page.locator('.rd-title')).toHaveText('The Great Gatsby');
   await page.waitForTimeout(3300);
+  await expect(bar).toHaveClass(/rd-chrome-on/); // still up past the old 3 s
+  await page.waitForTimeout(2000);
   await expect(bar).not.toHaveClass(/rd-chrome-on/);
   await tapTitle(page);
   await expect(bar).toHaveClass(/rd-chrome-on/);

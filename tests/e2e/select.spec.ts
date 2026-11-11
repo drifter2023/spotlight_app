@@ -128,6 +128,8 @@ test('N-06: 问旁注 opens the Agent drawer with the selection in 当前句\'s 
   const attach = panel.locator('.ag-attach');
   await expect(attach.locator('.ag-label')).toHaveText('选中的文字 · 第 1 章');
   await expect(attach.locator('.ag-attach-quote')).toHaveText(`“${text}”`);
+  const x = (await attach.locator('.ag-attach-x').boundingBox())!; // a 44 px target (review S7)
+  expect(Math.min(x.width, x.height)).toBeGreaterThanOrEqual(44);
   await expect(panel.getByLabel('问题')).toHaveAttribute('placeholder', '就这段文字提问');
   await expect(panel.locator('.ag-chip')).toHaveText(['解释这段', '这里有什么隐喻', '和前文有关联吗']);
   // The attachment takes 当前句's slot above the input: never both.
