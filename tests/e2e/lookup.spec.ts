@@ -179,7 +179,7 @@ test('Undo: 撤回 forgets a mistaken word; its footnotes are gone, also after a
   await page.waitForTimeout(450);
   await page.getByRole('button', { name: '保存' }).click(); // the footnote follows 保存; 撤回 clears it
   await expect(page.locator('.rd-w', { hasText: 'advice' }).locator('.rd-fn').first()).toHaveText('忠告');
-  await page.getByRole('button', { name: '撤回生词标记' }).click();
+  await page.getByRole('button', { name: '标记为认识的词' }).click();
   await expect(drawer(page)).toHaveCount(0);
   await expect(page.locator('.rd-hl')).toHaveCount(0);
   await expect(page.locator('.rd-w', { hasText: 'advice' })).toHaveCount(0);

@@ -5,7 +5,7 @@ import { WordDrawer } from './WordDrawer.tsx';
 
 /**
  * 单词抽屉 (Reader 4a): a tap on a sharp word tears the page open under its line. 保存 adds the word
- * to 生词; 撤回 (M5) undoes a mistaken tap: the book forgets the word (no footnotes, no record).
+ * to 生词; 认识 (M5, formerly 撤回) marks a mistaken tap as a known word: the book forgets the word (no footnotes, no record).
  */
 const meta = {
   title: 'Reader/单词抽屉 WordDrawer',

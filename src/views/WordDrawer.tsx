@@ -131,10 +131,11 @@ export function WordDrawer({ state, closing, result, x, saved, onSave, onUndo }:
             <button
               type="button"
               className="wd-undo"
-              aria-label="撤回生词标记"
+              aria-label="标记为认识的词"
               onClick={(e) => { e.stopPropagation(); onUndo(); }}
             >
-              撤回
+              {/* Was 撤回 (TASKS 25); renamed by the owner 2026-11-11 (review O5): it states the fact. */}
+              认识
             </button>
           </div>
         </>
