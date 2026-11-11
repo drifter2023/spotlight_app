@@ -15,10 +15,23 @@ it('scrolls for N frames, measures, and restores the scroll position', async () 
   engine = new ReaderEngine(el, makeBook(), { ...DEFAULT_PREFS, tier: 'full' });
   await engine.mount(null);
   const start = el.scrollTop;
-  const r = await runProbe(engine, 40);
+  const r = await runProbe(engine, 40, 10, Infinity);
   expect(r.frames).toBe(40);
+  expect(r.complete).toBe(true);
   expect(r.ratio).toBeGreaterThanOrEqual(0);
   expect(r.ratio).toBeLessThanOrEqual(1);
+  expect(el.scrollTop).toBe(start);
+});
+
+it('stops at its time budget, marks the run incomplete, and still restores the scroll position', async () => {
+  const el = host();
+  engine = new ReaderEngine(el, makeBook(), { ...DEFAULT_PREFS, tier: 'full' });
+  await engine.mount(null);
+  const start = el.scrollTop;
+  const t0 = performance.now();
+  const r = await runProbe(engine, 100_000, 0, 200);
+  expect(performance.now() - t0).toBeLessThan(2000);
+  expect(r.complete).toBe(false);
   expect(el.scrollTop).toBe(start);
 });
 

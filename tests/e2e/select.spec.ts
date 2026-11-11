@@ -36,8 +36,9 @@ test('N-04: long-press selects a word, dragging extends it, handles adjust it, a
   await ready(page);
   const p = await wordInBand(page, 'advice');
 
-  // A short press is still a tap: the word drawer opens, nothing is selected.
-  await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(120); await page.mouse.up();
+  // A short press is still a tap: the word drawer opens, nothing is selected. (A click, not a timed
+  // 120 ms hold: on a loaded CI runner the release can be handled after the 380 ms long-press timer.)
+  await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId('drawer')).toHaveAttribute('data-state', 'ready');
   await page.mouse.click(12, 600);
   await expect(page.getByTestId('drawer')).toHaveCount(0);
