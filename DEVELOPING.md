@@ -40,6 +40,12 @@ In Xcode, pick an iPhone simulator and press ▶. `npm run build:ios:dev` builds
 
 Production is https://spotlight-reader.ai-core.workers.dev (`wrangler.jsonc`, Worker name `spotlight-reader`). One deploy updates the static site and `POST /api/fetch` together. `public/_headers` makes `index.html` and `sw.js` revalidate on every visit, so phones pick up new deploys.
 
+Readers use **https://validavideogaga.store**, because `workers.dev` is blocked or slow on some networks. That domain points to the owner's VPS (`hostdare-us` in `~/.ssh/config`, Debian 13). There, Caddy relays every request to the `workers.dev` deploy, so each deploy from main appears on the domain with no extra step. The VPS setup:
+
+- `/etc/caddy/Caddyfile` listens on **TCP 443 only**, with HTTP/1.1 and HTTP/2 only. It rewrites `Host` and `Origin` to the `workers.dev` origin so the `/api/fetch` origin check passes, and it drops `Alt-Svc` so browsers never try HTTP/3.
+- The VPS also runs Hysteria2 on UDP 443. Hysteria owns port 80 and renews the Let's Encrypt certificate for the domain (`/etc/hysteria/config.yaml`). A daily cron job (`/etc/cron.d/spotlight-cert-sync`, running `/usr/local/bin/spotlight-cert-sync`) copies that certificate to `/etc/caddy/certs` and reloads Caddy. Never let Caddy bind port 80 or UDP 443.
+- The link-import rate limit (20 per minute per IP) sees the VPS's IP, so readers on the domain share one limit.
+
 The delivery path is GitHub Actions, not a laptop:
 
 1. Open a pull request. `.github/workflows/ci.yml` runs `npm run build`, `npm test`, and `npm run e2e` on Node 22. The dictionary sources are cached from `.cache/dict`. In CI, Playwright serves the `dist/` that job just built (`npm run preview` only).

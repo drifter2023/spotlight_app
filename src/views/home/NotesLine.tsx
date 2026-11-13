@@ -71,7 +71,14 @@ export function NotesLine({ session, version, afterReading, onOpenPage }: {
     setLoaded({ has, unread, pending: pend });
   }, [db]);
   useEffect(() => { setFailed(null); void load(); }, [load, version]);
-  useEffect(() => notes.subscribe((s) => { setRun(s); if (s.status !== 'running') void load(); }), [notes, load]);
+  useEffect(() => {
+    const on = (s: RunState) => { setRun(s); if (s.status !== 'running') void load(); };
+    const off = notes.subscribe(on);
+    // Home starts the automatic run before the shelf (and so this line) is mounted: a run that ended between
+    // the first render and this subscription would otherwise leave the line on 正在整理.
+    on(notes.state);
+    return off;
+  }, [notes, load]);
 
   if (!loaded?.has) return null;
   const now = Date.now();
